@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AV Evaluation Agent Console</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="agent-panel">
+        <div class="brand-block">
+          <div class="brand-mark">AV</div>
+          <div>
+            <div class="brand-title">EVAL_AGENT</div>
+            <div class="brand-subtitle">n8n + LangGraph orchestration</div>
+          </div>
+        </div>
+
+        <div class="agent-status">
+          <span class="status-dot" id="healthDot"></span>
+          <span id="healthText">Agent 연결 확인 중</span>
+        </div>
+
+        <section class="message-stack" id="messageStack" aria-label="Agent messages">
+          <div class="message system">
+            <span class="message-label">SYSTEM</span>
+            자연어 시나리오 요청을 n8n Webhook으로 받고, LangGraph Agent가 정의서 JSON과 실행 준비 상태를 생성합니다.
+          </div>
+          <div class="message assistant">
+            <span class="message-label">AGENT</span>
+            지금 화면은 최종 점수판이 아니라, 평가 자동화 에이전트의 노드-그래프 운영 구조를 보여주는 MVP 콘솔입니다.
+          </div>
+        </section>
+
+        <form class="prompt-box" id="promptForm">
+          <label for="promptInput">Natural language scenario request</label>
+          <textarea id="promptInput" rows="7">시나리오2 고속도로 cut-out 상황을 정의서 형식으로 채우고 n8n 자동화 흐름에 등록해줘. KPI는 공통 기준으로 계산 준비.</textarea>
+          <div class="prompt-options">
+            <label><input type="checkbox" id="executeSimulation" /> CARLA/OpenCDA 실행까지 허용</label>
+            <label><input type="checkbox" id="runKpis" checked /> KPI 계산 준비</label>
+            <label><input type="checkbox" id="recordVideo" /> 영상 저장 준비</label>
+          </div>
+          <button class="primary-action" type="submit">Send to n8n-style Agent</button>
+        </form>
+
+        <div class="quick-prompts">
+          <button data-prompt="시나리오1 비신호 4지 교차로에서 V2X 차량은 정지선 대기 후 안전하면 재출발하고, No V2X는 늦은 시각 인지로 near-crash가 발생하는 조건을 정의서 형식으로 채워줘.">Scenario 1</button>
+          <button data-prompt="시나리오2 고속도로 cut-out 상황에서 V2X 차량은 앞 차량 통신을 받아 미리 차선변경하고, No V2X는 아슬아슬하게 회피하는 조건을 정의서 형식으로 채워줘.">Scenario 2</button>
+          <button data-prompt="평가기관 제출용으로 인지, 제어, 교통 영향성, 주행 안전성 KPI가 모두 계산되도록 실험 준비 상태를 점검해줘.">Full KPI</button>
+        </div>
+      </aside>
+
+      <main class="operations">
+        <header class="top-bar">
+          <div>
+            <p class="eyebrow">Autonomous Vehicle Evaluation Agent</p>
+            <h1>n8n 기반 자율주행 평가 자동화 콘솔</h1>
+          </div>
+          <div class="run-control">
+            <div class="mode-switch">
+              <button class="active" type="button">Workflow</button>
+              <button type="button">Audit</button>
+            </div>
+            <button class="ghost-action" id="refreshButton" type="button">Refresh</button>
+            <div class="clock-block">
+              <span id="clockText">00:00:00</span>
+              <strong id="runState">READY</strong>
+            </div>
+          </div>
+        </header>
+
+        <section class="alarm-strip" aria-label="Pipeline stages">
+          <button class="stage active" data-stage="webhook">n8n Webhook</button>
+          <button class="stage" data-stage="parse">LangGraph Parse</button>
+          <button class="stage" data-stage="definition">Definition JSON</button>
+          <button class="stage" data-stage="validate">Validation</button>
+          <button class="stage" data-stage="plan">Run Plan</button>
+          <button class="stage" data-stage="status">Status API</button>
+        </section>
+
+        <div class="content-grid node-layout">
+          <nav class="side-nav" aria-label="Console navigation">
+            <button class="nav-item active" data-view="workflow">Workflow</button>
+            <button class="nav-item" data-view="n8n">n8n</button>
+            <button class="nav-item" data-view="definition">Definition</button>
+            <button class="nav-item" data-view="runner">Runner</button>
+            <button class="nav-item" data-view="audit">Audit</button>
+          </nav>
+
+          <section class="workbench">
+            <div class="panel workflow-panel">
+              <div class="panel-header">
+                <div>
+                  <span class="section-kicker">Node graph architecture</span>
+                  <h2>n8n orchestration map</h2>
+                </div>
+                <div class="scenario-tabs">
+                  <button class="active" data-scenario="scenario_1">Scenario 1</button>
+                  <button data-scenario="scenario_2">Scenario 2</button>
+                </div>
+              </div>
+
+              <div class="node-canvas" id="nodeCanvas">
+                <svg class="connector-layer" viewBox="0 0 760 540" preserveAspectRatio="none" aria-hidden="true">
+                  <path class="connector active" d="M112 88 C160 88 184 88 236 88" />
+                  <path class="connector active" d="M346 88 C398 88 420 88 468 88" />
+                  <path class="connector active" d="M562 142 C562 192 562 202 562 236" />
+                  <path class="connector" d="M488 288 C404 300 360 312 340 348" />
+                  <path class="connector" d="M294 405 C238 418 184 430 130 452" />
+                  <path class="connector" d="M386 405 C434 428 482 445 532 452" />
+                </svg>
+
+                <button class="flow-node webhook active" data-node="webhook" style="--x: 24px; --y: 44px">
+                  <span class="node-type">n8n Trigger</span>
+                  <strong>Scenario Request Webhook</strong>
+                  <small>자연어 요청 수신</small>
+                </button>
+
+                <button class="flow-node langgraph" data-node="parse" style="--x: 248px; --y: 44px">
+                  <span class="node-type">LangGraph</span>
+                  <strong>Scenario Understanding</strong>
+                  <small>시나리오 유형·ODD·actor 추론</small>
+                </button>
+
+                <button class="flow-node data" data-node="definition" style="--x: 472px; --y: 44px">
+                  <span class="node-type">Structured Output</span>
+                  <strong>Definition JSON Builder</strong>
+                  <small>정의서 항목 자동 채움</small>
+                </button>
+
+                <button class="flow-node guard" data-node="validate" style="--x: 472px; --y: 220px">
+                  <span class="node-type">Guardrail</span>
+                  <strong>Validation Agent</strong>
+                  <small>누락·충돌·근거 확인</small>
+                </button>
+
+                <button class="flow-node plan" data-node="plan" style="--x: 248px; --y: 340px">
+                  <span class="node-type">Command Planner</span>
+                  <strong>YAML/PY + KPI Plan</strong>
+                  <small>OpenCDA 실행 계획 생성</small>
+                </button>
+
+                <button class="flow-node queue" data-node="queue" style="--x: 24px; --y: 430px">
+                  <span class="node-type">n8n Queue</span>
+                  <strong>Execution Queue</strong>
+                  <small>실험은 승인 후 진행</small>
+                </button>
+
+                <button class="flow-node api" data-node="status" style="--x: 472px; --y: 430px">
+                  <span class="node-type">FastAPI</span>
+                  <strong>Status / Artifact API</strong>
+                  <small>run_id, manifest, audit trail</small>
+                </button>
+
+                <div class="workflow-boundary n8n-boundary">
+                  <span>n8n orchestration boundary</span>
+                </div>
+                <div class="workflow-boundary backend-boundary">
+                  <span>LangGraph / FastAPI worker boundary</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="node-info-grid">
+              <div class="panel n8n-panel">
+                <div class="panel-header compact">
+                  <h2>n8n workflow endpoints</h2>
+                  <span>importable template</span>
+                </div>
+                <div class="endpoint-list">
+                  <div><strong>POST</strong><code>/webhook/av-eval-agent/start</code><span>요청을 run_id로 등록</span></div>
+                  <div><strong>POST</strong><code>/webhook/av-eval-agent/prepare</code><span>정의서·실행계획 생성</span></div>
+                  <div><strong>POST</strong><code>/webhook/av-eval-agent/status</code><span>상태와 artifact 조회</span></div>
+                </div>
+              </div>
+
+              <div class="panel queue-panel">
+                <div class="panel-header compact">
+                  <h2>Execution history</h2>
+                  <span id="queueHint">latest 5 runs</span>
+                </div>
+                <div class="run-list" id="runList"></div>
+              </div>
+            </div>
+          </section>
+
+          <aside class="result-panel">
+            <div class="panel inspector-panel">
+              <div class="panel-header compact">
+                <h2>Node inspector</h2>
+                <span id="selectedNode">Scenario Request Webhook</span>
+              </div>
+              <div class="node-inspector">
+                <p id="nodePurpose">사용자 자연어 요청을 받아 평가 파이프라인의 입력으로 정규화합니다.</p>
+                <dl id="nodeIo">
+                  <div><dt>Input</dt><dd>user_request, run options</dd></div>
+                  <div><dt>Output</dt><dd>normalized payload</dd></div>
+                  <div><dt>Risk</dt><dd>요청이 모호하면 기본값과 가정을 분리 기록</dd></div>
+                </dl>
+              </div>
+            </div>
+
+            <div class="panel verdict-panel">
+              <div class="panel-header compact">
+                <h2>Workflow readiness</h2>
+                <span id="selectedRun">No run selected</span>
+              </div>
+              <div class="readiness-meter">
+                <span id="scoreNumber">--</span>
+                <small>/100</small>
+              </div>
+              <div class="verdict-row">
+                <span>Status</span>
+                <strong id="verdictText">PENDING</strong>
+              </div>
+            </div>
+
+            <div class="panel checklist-panel">
+              <div class="panel-header compact">
+                <h2>n8n handoff checklist</h2>
+              </div>
+              <ul class="check-list">
+                <li><span class="check ok"></span> Webhook 입력 형식 정의</li>
+                <li><span class="check ok"></span> LangGraph API 호출 구조</li>
+                <li><span class="check warn"></span> CARLA 실행은 승인 후 연결</li>
+                <li><span class="check idle"></span> 외부 배포 URL은 발표 직전 고정</li>
+              </ul>
+            </div>
+
+            <div class="panel detail-panel">
+              <div class="panel-header compact">
+                <h2>Run details</h2>
+              </div>
+              <dl class="detail-list" id="detailList">
+                <div><dt>Scenario</dt><dd>-</dd></div>
+                <div><dt>Status</dt><dd>-</dd></div>
+                <div><dt>Manifest</dt><dd>-</dd></div>
+                <div><dt>Alignment</dt><dd>-</dd></div>
+              </dl>
+            </div>
+
+            <div class="panel artifact-panel">
+              <div class="panel-header compact">
+                <h2>Artifacts</h2>
+                <button class="small-action" id="openLatestButton" type="button">Open status</button>
+              </div>
+              <div class="artifact-list" id="artifactList">
+                <div class="empty-state">아직 선택된 run이 없습니다.</div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

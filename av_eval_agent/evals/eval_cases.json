@@ -1,0 +1,256 @@
+[
+  {
+    "id": "scenario2_cutout_v2x_dashboard",
+    "user_request": "시나리오2 고속도로 cut-out 상황을 115 km/h 기준으로 정의서 형식으로 채우고 V2X 50m 조건의 KPI 대시보드까지 준비해줘.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "requested_actions": {
+        "calculate_kpis": true,
+        "generate_dashboard": true
+      },
+      "detected_values": {
+        "speed_kmh": 115.0,
+        "communication_range_m": 50.0,
+        "v2x_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario1_occlusion_intersection",
+    "user_request": "시나리오 1 비신호 교차로에서 좌측 시야가 가려진 상황을 정의하고 공통 KPI 계산 계획을 만들어줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "requested_actions": {
+        "calculate_kpis": true
+      },
+      "detected_values": {
+        "occlusion_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario2_lane_change_run",
+    "user_request": "2차로 고속도로 차로 변경 위험 상황을 100 km/h로 실험 실행 준비해줘.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "requested_actions": {
+        "run_simulation": true
+      },
+      "detected_values": {
+        "lane_count": 2,
+        "speed_kmh": 100.0
+      }
+    }
+  },
+  {
+    "id": "scenario1_night_occlusion",
+    "user_request": "야간 교차로 음영 구간에서 ego가 정지선 접근 중인 scenario1을 정의서와 보고서 중심으로 정리해줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "detected_values": {
+        "day_night": "야간",
+        "occlusion_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario2_overtake_english",
+    "user_request": "Build scenario 2 highway overtake cut out with V2X enabled and calculate KPI metrics.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "requested_actions": {
+        "calculate_kpis": true
+      },
+      "detected_values": {
+        "v2x_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario1_clear_day",
+    "user_request": "맑음 주간 조건의 시나리오1 교차로 상황을 30 km/h 기준으로 정의해줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "detected_values": {
+        "weather": "맑음",
+        "day_night": "주간",
+        "speed_kmh": 30.0
+      }
+    }
+  },
+  {
+    "id": "scenario2_rain_sensor",
+    "user_request": "우천 고속도로 차선 변경 상황에서 LiDAR 80m 탐지 조건과 10Hz 센서를 반영해줘.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "detected_values": {
+        "weather": "비",
+        "sensor_detection_range_m": 80.0,
+        "sensor_frequency_hz": 10.0
+      }
+    }
+  },
+  {
+    "id": "scenario1_fog",
+    "user_request": "안개 낀 교차로에서 시야 제한이 있는 시나리오 1 평가를 설계해줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "detected_values": {
+        "weather": "안개",
+        "occlusion_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "custom_parking_lot",
+    "user_request": "주차장 저속 합류 상황을 새 시나리오 후보로 정리하고 필요한 정의서 보완 항목을 알려줘.",
+    "expected": {
+      "scenario_id": "custom",
+      "scenario_type": "custom"
+    }
+  },
+  {
+    "id": "scenario2_record_dashboard",
+    "user_request": "scenario2 cut out을 실행하고 영상 record와 dashboard 결과를 남겨줘.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "requested_actions": {
+        "run_simulation": true,
+        "generate_dashboard": true
+      }
+    }
+  },
+  {
+    "id": "scenario1_v2x_range",
+    "user_request": "통신 반경 20m V2X 협력 인지를 쓰는 교차로 occlusion scenario 1을 평가해줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "detected_values": {
+        "communication_range_m": 20.0,
+        "v2x_mentioned": true,
+        "occlusion_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario2_two_lanes_korean",
+    "user_request": "2차로 도로에서 고속 차로 변경 중 위험 객체 2대가 있는 시나리오2를 작성해줘.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "detected_values": {
+        "lane_count": 2,
+        "actor_count": 2
+      }
+    }
+  },
+  {
+    "id": "scenario1_left_occlusion_kpi",
+    "user_request": "좌측 건물로 시야가 차폐되는 교차로 scenario 1의 MOTA, TTC, PET 계산 계획을 만들어줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "requested_actions": {
+        "calculate_kpis": true
+      },
+      "detected_values": {
+        "occlusion_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario2_curve",
+    "user_request": "곡선부 highway cut out 상황을 90 km/h 기준으로 정의하고 실행 명령을 준비해줘.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "requested_actions": {
+        "run_simulation": true
+      },
+      "detected_values": {
+        "road_alignment_kind": "곡선부",
+        "speed_kmh": 90.0
+      }
+    }
+  },
+  {
+    "id": "scenario1_straight_intersection",
+    "user_request": "직선부 + 교차로 접근 상황에서 정지선 근처 occlusion을 평가하는 시나리오 1을 만들어줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "detected_values": {
+        "road_alignment_kind": "직선부 + 교차로",
+        "occlusion_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario2_channels",
+    "user_request": "scenario2 lane change에 32채널 lidar와 V2X 통신을 포함해줘.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "detected_values": {
+        "lidar_channels": 32,
+        "v2x_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "scenario1_report_only",
+    "user_request": "시나리오 1 교차로 정의서를 만들고 실행은 하지 말고 검토 보고서만 생성해줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "requested_actions": {
+        "run_simulation": false
+      }
+    }
+  },
+  {
+    "id": "scenario2_kph_alias",
+    "user_request": "highway cut-out scenario at 120 kph, prepare common KPI evaluation.",
+    "expected": {
+      "scenario_id": "scenario_2",
+      "scenario_type": "highway_cutout",
+      "requested_actions": {
+        "calculate_kpis": true
+      },
+      "detected_values": {
+        "speed_kmh": 120.0
+      }
+    }
+  },
+  {
+    "id": "scenario1_snow",
+    "user_request": "눈 오는 비신호 교차로 시야 제한 상황을 시나리오 정의서로 변환해줘.",
+    "expected": {
+      "scenario_id": "scenario_1",
+      "scenario_type": "intersection_occlusion",
+      "detected_values": {
+        "weather": "눈",
+        "occlusion_mentioned": true
+      }
+    }
+  },
+  {
+    "id": "custom_eval_only",
+    "user_request": "새로운 터널 진입 시나리오 후보를 만들고 fallback 처리 여부와 재시도 성공률 평가 기준을 기록해줘.",
+    "expected": {
+      "scenario_id": "custom",
+      "scenario_type": "custom"
+    }
+  }
+]
+

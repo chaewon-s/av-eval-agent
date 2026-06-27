@@ -1,0 +1,177 @@
+description: |-
+  Copyright 2021 <UCLA Mobility Lab>
+  Author: Runsheng Xu <rxx3386@ucla.edu>
+  Content: This is the scenario testing configuration file for v2x perception data dumping
+
+# Define settings for multi-class blueprint spawning
+# Comment out this chunk of code or set use_multi_class_bp to be False if you don't want to spawn multi-class actors
+blueprint:
+  use_multi_class_bp: true
+  bp_meta_path: "opencda/assets/blueprint_meta/bbx_stats_0912.json" # Define the path for loading the blueprint metadata for defining the class of each blueprint
+  # Define blueprint type sample probabilities
+  bp_class_sample_prob:
+    car: 0.5
+    truck: 0.1
+    bus: 0.1
+    bicycle: 0.1
+    motorcycle: 0.1
+    
+world:
+  sync_mode: true
+  client_port: 2000
+  fixed_delta_seconds: 0.05
+  seed: 11 # seed for numpy and random
+  # fps: 20
+
+# Define the basic parameters of the vehicles
+vehicle_base:
+  datadump:
+    title: scenario1
+  sensing:
+      activate: false # when not activated, objects positions will be retrieved from server directly
+      camera:
+        visualize: 1 # how many camera images need to be visualized. 0 means no visualization for camera
+        num: 4 # how many cameras are mounted on the vehicle. Maximum 3(frontal, left and right cameras)
+        # relative positions (x,y,z,yaw) of the camera. len(positions) should be equal to camera num
+        positions:
+          - [2.5, 0, 1.0, 0]
+          - [0.0, 0.3, 1.8, 100]
+          - [0.0, -0.3, 1.8, -100]
+          - [-2.0, 0.0, 1.5, 180]
+      lidar: # lidar sensor configuration, check CARLA sensor reference for more details
+        visualize: false
+        channels: 64
+        range: 50
+        points_per_second: 10000
+        rotation_frequency: 100 # the simulation is 20 fps
+        upper_fov: 90
+        lower_fov: -90
+        dropoff_general_rate: 0
+        dropoff_intensity_limit: 0
+        dropoff_zero_intensity: 0
+        noise_stddev: 0.02
+  map_manager:
+    visualize: false
+    activate: false
+  
+  safety_manager: # used to watch the safety status of the cav
+    print_message: true # whether to print the message if hazard happens
+    collision_sensor:
+      history_size: 30
+      col_thresh: 1
+    stuck_dector:
+      len_thresh: 500
+      speed_thresh: 0.5
+    offroad_dector: [ ]
+    traffic_light_detector: # whether the vehicle violate the traffic light
+      light_dist_thresh: 20
+  
+  behavior:
+    max_speed: 50 # maximum speed, km/h
+    tailgate_speed: 60 # keep temporary speed-ups near the same target speed
+    overtake_allowed: true # whether overtake allowed, typically false for platoon leader
+    speed_lim_dist: 10
+    speed_decrease: 3
+    safety_time: 4
+    collision_time_ahead: 1.5
+    emergency_param: 1
+    local_planner:  # trajectory planning related
+      buffer_size: 12 # waypoint buffer size
+      trajectory_update_freq: 15 # used to control trajectory points updating frequency
+      waypoint_update_freq: 9 # used to control waypoint updating frequency
+      min_dist: 3 # used to pop out the waypoints too close to current location
+      trajectory_dt: 0.20 # for every dt seconds, we sample a trajectory point from the trajectory path as next goal state
+      debug: false # whether to draw future/history waypoints
+      debug_trajectory: false # whether to draw the trajectory points and path
+  v2x:
+    enabled: false
+
+# define the background traffic control by carla
+carla_traffic_manager:
+  global_speed_perc: -100
+  auto_lane_change: false
+  random: true # whether to random select vehicles' color and model
+  ignore_lights_percentage: 0 # whether set the traffic ignore traffic lights
+  vehicle_list: ~  # a number or a list
+  # Used only when vehicle_list is a number.
+  #  x_min, x_max, y_min, y_max, x_step, y_step, vehicle_num
+  range:
+    # - [-11, 12, 100, 200, 3.5, 15, 25]
+    - [10, 200, 100, 250, 3.5, 5, 0]
+# define scenario. In this scenario, a 4-vehicle platoon already exists.
+scenario:
+  rsu_list:
+    - name: rsu1
+      spawn_position: [314, -140, 3.0]
+      id: -1
+      scenario_title: scenario1
+
+  single_cav_list:
+    - name: ego
+      spawn_position: [314.119965, -150.843727, 0.481942, 0, -89.489075, 0] # [314.119965, -140.843727, 0.481942, 0, -89.489075, 0]
+      destination: [314.587738, -200.297791, 0.400000]
+      v2x:
+        enabled: false
+      behavior:
+        local_planner:
+          debug_trajectory: false
+          debug: false
+      sensing:
+        perception:
+          activate: false
+          connected: false
+          lidar:
+            visualize: true
+            channels: 64
+            range: 50
+            points_per_second: 10000000
+            rotation_frequency: 100 # the simulation is 20 fps
+            # upper_fov: 90
+            # lower_fov: -90
+            horizontal_fov: 360
+            # dropoff_general_rate: 0
+            # dropoff_intensity_limit: 0
+            # dropoff_zero_intensity: 0
+            # noise_stddev: 0.02
+          
+        
+    - name: neighboring
+      spawn_position: [310.917511, -161.227646, 0.400000, 0, 90.510933, 0] # [310.917511, -161.227646, 0.400000, 0, 90.510933, 0]
+      destination: [310.917511, -100.582977, 0.581942]
+      vehicle_type: vehicle.mitsubishi.fusorosa
+      v2x:
+        enabled: false
+      behavior:
+        max_speed: 30
+        local_planner:
+          debug_trajectory: false
+          debug: false
+      sensing:
+        perception:
+          activate: false
+          connected: false
+
+
+    - name: subject
+      spawn_position: [295.782043, -169.035751, 0.539108,  0, 0.326125, 0] # [290.782043, -169.035751, 0.539108,  0, 0.326125, 0] 
+      destination: [340.705292, -168.825424, 0.600000]
+      vehicle_type: vehicle.dodge.charger_2020
+      v2x:
+        enabled: false
+      behavior:
+        local_planner:
+          debug_trajectory: false
+          debug: false
+      sensing:
+        perception:
+          activate: false
+          connected: false
+          lidar:
+            visualize: true
+            channels: 32
+            range: 30
+            points_per_second: 1000000
+            rotation_frequency: 100 # the simulation is 20 fps
+
+
+

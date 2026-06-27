@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AV Evaluation KPI Result",
+  "type": "object",
+  "required": ["run_id", "scenario_id", "kpis"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "scenario_id": { "type": "string" },
+    "kpi_standard_version": { "type": "string" },
+    "kpis": {
+      "type": "object",
+      "properties": {
+        "perception": {
+          "type": "object",
+          "properties": {
+            "MOTA": { "type": "number" },
+            "MOTP_m": { "type": "number" }
+          }
+        },
+        "traffic_impact": {
+          "type": "object",
+          "properties": {
+            "progress_adjusted_delay_s": { "type": "number" },
+            "flow_efficiency": { "type": "number" }
+          }
+        },
+        "driving_safety": {
+          "type": "object",
+          "properties": {
+            "min_2d_ttc_s": { "type": "number" },
+            "pet_s": { "type": ["number", "string"] },
+            "required_deceleration_mps2": { "type": "number" }
+          }
+        },
+        "control": {
+          "type": "object",
+          "properties": {
+            "acceleration_variance_max": { "type": "number" },
+            "yaw_rate_residual_rms": { "type": "number" }
+          }
+        }
+      }
+    },
+    "normalized_scores": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    }
+  }
+}
+

@@ -1,0 +1,55 @@
+name: Agent task
+description: Planner, tool executor, memory, evaluator, guardrail, or workflow work item
+title: "[Agent] "
+labels:
+  - agent-design
+  - needs-triage
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Which requirement, document, experiment, or review comment motivates this task?
+      placeholder: Link the source document, run_id, scenario_id, or design note.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Agent component
+      options:
+        - Planner
+        - Tool Executor
+        - Memory
+        - Evaluator
+        - Guardrail
+        - MCP Tool
+        - Workflow / Orchestration
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Keep this to a PR-sized unit of work.
+      placeholder: Describe the concrete code, docs, eval, or configuration change.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] Requirement or source document is linked.
+        - [ ] Code/docs/config changes are complete.
+        - [ ] Eval, dry-run, or smoke test result is recorded.
+        - [ ] Follow-up work is listed if needed.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      placeholder: Example: powershell -ExecutionPolicy Bypass -File .\av_eval_agent\scripts\run_agent_evals.ps1 --fail-on-fail
+

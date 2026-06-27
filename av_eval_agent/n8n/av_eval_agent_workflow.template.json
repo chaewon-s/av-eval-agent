@@ -1,0 +1,119 @@
+{
+  "id": "AV_EVALUATION_AGENT_N8N_ORCHESTRATOR",
+  "name": "AV Evaluation Agent - n8n Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "av-eval-agent/start",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "WebhookStart",
+      "name": "1. Scenario Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $input.first().json;\nconst body = incoming.body ?? incoming;\nconst userRequest = body.user_request || body.prompt || body.text || '자율주행 평가 시나리오를 정의서 형식으로 채우고 실행 준비 상태를 점검해줘.';\nreturn [{ json: {\n  user_request: userRequest,\n  execute_simulation: body.execute_simulation ?? false,\n  run_kpis: body.run_kpis ?? true,\n  apply_ml: body.apply_ml ?? false,\n  record: body.record ?? false,\n  background: body.background ?? true\n}}];"
+      },
+      "id": "NormalizeRequest",
+      "name": "2. Normalize Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json;\nconst data = await helpers.httpRequest({\n  method: 'POST',\n  url: 'http://host.docker.internal:8010/pipeline/submit',\n  headers: { 'Content-Type': 'application/json; charset=utf-8' },\n  body: payload,\n  json: true\n});\nreturn [{ json: data }];"
+      },
+      "id": "SubmitPipeline",
+      "name": "3. Submit to LangGraph Agent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [560, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const run = $input.first().json;\nif (!run.run_id) throw new Error('run_id가 없습니다. pipeline/submit 응답을 확인하세요.');\nconst status = await helpers.httpRequest({\n  method: 'GET',\n  url: `http://host.docker.internal:8010/pipeline/status/${run.run_id}`,\n  json: true\n});\nreturn [{ json: { ...run, latest_status: status } }];"
+      },
+      "id": "CheckStatus",
+      "name": "4. Read Status / Artifacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "Respond",
+      "name": "5. Return Run Summary",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 0]
+    }
+  ],
+  "connections": {
+    "1. Scenario Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "2. Normalize Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Normalize Request": {
+      "main": [
+        [
+          {
+            "node": "3. Submit to LangGraph Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Submit to LangGraph Agent": {
+      "main": [
+        [
+          {
+            "node": "4. Read Status / Artifacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Read Status / Artifacts": {
+      "main": [
+        [
+          {
+            "node": "5. Return Run Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "isArchived": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "versionId": "template",
+  "triggerCount": 0,
+  "tags": ["av-evaluation", "langgraph", "opencda"]
+}

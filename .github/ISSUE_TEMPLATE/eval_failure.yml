@@ -1,0 +1,39 @@
+name: Eval failure
+description: Track a failed or partial AV Evaluation Agent case
+title: "[Eval] "
+labels:
+  - eval
+  - needs-triage
+body:
+  - type: input
+    id: run_or_case
+    attributes:
+      label: run_id or eval case id
+      placeholder: scenario2_cutout_v2x_dashboard
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed result
+      description: Paste the failing checks or relevant report fragment.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What should the Agent classify, extract, or produce?
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Artifacts
+      placeholder: Link eval report, run manifest, dashboard, log, or design decision.
+  - type: textarea
+    id: fix_scope
+    attributes:
+      label: Proposed fix scope
+      placeholder: Parser keyword, scenario mapping, KPI contract, guardrail, or documentation update.
+

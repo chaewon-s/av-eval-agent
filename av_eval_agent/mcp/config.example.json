@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "av-eval-agent": {
+      "command": "C:\\Users\\User\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+      "args": [
+        "<project-root>\\av_eval_agent\\mcp\\server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "<project-root>\\av_eval_agent\\.venv\\Lib\\site-packages"
+      }
+    }
+  }
+}
+

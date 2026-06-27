@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+pydantic-settings
+langgraph
+langchain
+langchain-openai
+python-dotenv
+pyyaml
+pandas
+numpy
+matplotlib
+

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AV Evaluation Scenario Definition",
+  "type": "object",
+  "required": ["schema_version", "scenario_id", "scenario_type", "road", "actors", "evaluation"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "default": "0.1.0"
+    },
+    "scenario_id": {
+      "type": "string"
+    },
+    "scenario_type": {
+      "type": "string",
+      "enum": ["intersection_occlusion", "highway_cutout", "custom"]
+    },
+    "natural_language_request": {
+      "type": "string"
+    },
+    "road": {
+      "type": "object",
+      "required": ["map_name", "road_type"],
+      "properties": {
+        "map_name": { "type": "string" },
+        "road_type": { "type": "string" },
+        "lanes": { "type": "integer", "minimum": 1 },
+        "reference_speed_kmh": { "type": "number", "minimum": 0 }
+      }
+    },
+    "actors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "role", "vehicle_type", "initial_state"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": {
+            "type": "string",
+            "enum": ["ego", "actor", "neighboring", "background", "obstacle"]
+          },
+          "vehicle_type": { "type": "string" },
+          "initial_state": {
+            "type": "object",
+            "properties": {
+              "spawn_position": {
+                "type": "array",
+                "items": { "type": "number" }
+              },
+              "lane": { "type": "integer" },
+              "speed_kmh": { "type": "number" },
+              "movement": { "type": "string" },
+              "relative_position": { "type": "string" },
+              "relative_time_gap_s": { "type": "number" }
+            }
+          },
+          "destination": {
+            "type": "array",
+            "items": { "type": "number" }
+          },
+          "v2x": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "communication_range_m": { "type": "number" },
+              "message_provider": { "type": "boolean" }
+            }
+          },
+          "sensing": {
+            "type": "object",
+            "properties": {
+              "perception_enabled": { "type": "boolean" },
+              "lidar_enabled": { "type": "boolean" },
+              "camera_enabled": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "occlusion": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "cause_actor": { "type": "string" },
+        "location": { "type": "string" }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "required": ["kpis"],
+      "properties": {
+        "kpis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "MOTA",
+              "MOTP",
+              "ProgressAdjustedDelay",
+              "FlowEfficiency",
+              "Min2DTTC",
+              "PET",
+              "RequiredDeceleration",
+              "AccelerationVariance",
+              "YawRateResidualRMS"
+            ]
+          }
+        },
+        "observation_horizon": {
+          "type": "object",
+          "properties": {
+            "start_s": { "type": "number" },
+            "end_policy": { "type": "string" },
+            "window_s": { "type": "number" },
+            "stride_s": { "type": "number" }
+          }
+        }
+      }
+    }
+  }
+}
+

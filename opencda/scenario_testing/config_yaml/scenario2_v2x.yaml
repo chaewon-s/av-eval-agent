@@ -1,0 +1,100 @@
+description: |-
+  Copyright 2021 <UCLA Mobility Lab>
+  Author: Runsheng Xu <rxx3386@ucla.edu>
+  Content: This is the scenario testing configuration file for single vehicle perception/localization/behavior/control
+           testing in high speed in the customized 2lanefree simple version.
+
+vehicle_base:
+    datadump:
+      title: scenario2_v2x
+    sensing:
+      lidar:
+        visualize: true
+        channels: 32
+        range: 50
+        points_per_second: 10000
+        rotation_frequency: 10
+    behavior:
+      overtake_distance: 15
+# define the carla traffic
+carla_traffic_manager:
+  auto_lane_change: true
+  vehicle_list:
+    # - spawn_position: [ -330, 8.3, 0.3, 0, 0, 0 ]
+    #   vehicle_speed_perc: 0
+    - spawn_position: [ -320, 4.8, 0.3, 0, 0, 0 ]
+      vehicle_speed_perc: -200
+    # - spawn_position: [ -300, 8.3, 0.3, 0, 0, 0 ]
+    #   vehicle_speed_perc: -100
+    # - spawn_position: [ -280, 4.8, 0.3, 0, 0, 0 ]
+      # vehicle_speed_perc: -200
+
+
+scenario:
+  single_cav_list: # this is for merging vehicle or single cav without v2x
+    - name: cav1
+      spawn_position: [ -380, 8.3, 0.3, 0, 0, 0 ]
+      # this parameter will overwrite the spawn position, when it is set, the vehicle is spawn
+      # at the merging lane. 0.5 means it is spawn at the middle of the whole merging lange.
+      # spawn_special: [0.34]
+      destination: [ -260, 8.3, 0.3 ]
+      v2x:
+        communication_range: 20
+        enabled: true
+      behavior:
+        max_speed: 115
+        speed_lim_dist: 10
+        overtake_distance: 100
+        local_planner:
+          debug_trajectory: true
+          debug: true
+      sensing:
+        perception:
+          activate: true
+          connected: true
+          lidar:
+            visualize: true #끄면 안됨.
+            channels: 64
+            range: 50
+            points_per_second: 10000000
+            rotation_frequency: 100 # the simulation is 20 fps
+            # upper_fov: 90
+            # lower_fov: -90
+            horizontal_fov: 360
+
+    - name: neighboring
+      spawn_position: [ -370, 8.3, 0.3, 0, 0, 0 ]
+      destination: [ -260, 8.3, 0.3 ]
+      vehicle_type: vehicle.nissan.patrol_2021
+      v2x:
+        communication_range: 20
+        enabled: true
+      behavior:
+        max_speed: 120
+        speed_lim_dist: 10
+        overtake_allowed: true
+        overtake_distance: 20
+        local_planner:
+          debug_trajectory: true
+          debug: true
+      sensing:
+        perception:
+          activate: true
+          connected: true
+          lidar:
+            visualize: true #끄면 안됨.
+            channels: 64
+            range: 50
+            points_per_second: 10000000
+            rotation_frequency: 100 # the simulation is 20 fps
+            horizontal_fov: 360
+
+    - name: subject
+      spawn_position: [ -300, 8.3, 0.3, 0, 0, 0 ]
+      destination: [ 700, 8.3, 0.3 ]
+      vehicle_type: vehicle.nissan.micra
+      v2x:
+        communication_range: 20
+        enabled: false
+      behavior:
+        max_speed: 0
