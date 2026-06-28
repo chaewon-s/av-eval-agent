@@ -4,59 +4,59 @@ const state = {
   selectedRunId: null,
   history: [],
   selectedScenario: "scenario_1",
-  selectedNode: "webhook",
+  selectedNode: "spec",
   startedAt: Date.now(),
 };
 
 const nodeDetails = {
-  webhook: {
-    title: "Scenario Request Webhook",
-    purpose: "사용자 자연어 요청을 받아 평가 파이프라인의 입력으로 정규화합니다.",
-    input: "user_request, execute_simulation, run_kpis, record",
-    output: "normalized request payload",
-    risk: "요청이 모호하면 기본값과 가정을 분리해서 기록해야 합니다.",
-  },
-  parse: {
-    title: "Scenario Understanding",
-    purpose: "LangGraph가 시나리오 유형, 도로 환경, ego/actor/neighboring 역할을 추론합니다.",
-    input: "normalized natural-language request",
-    output: "scenario_id, ODD/OEDR, actor-role candidates",
-    risk: "정의서에 없는 값은 임의 확정하지 않고 assumption으로 표시합니다.",
-  },
-  definition: {
-    title: "Definition JSON Builder",
-    purpose: "정의서 형식에 맞춰 차량, 도로, 센서, 통신, 초기 상대거리 항목을 구조화합니다.",
-    input: "scenario intent + YAML/PY evidence",
+  spec: {
+    title: "1. ScenarioSpecAgent",
+    purpose: "사용자 자연어 요청을 시나리오 정의서 형식의 JSON으로 변환합니다. 명시되지 않은 값은 일반적인 기본값과 가정을 분리해 기록합니다.",
+    input: "user_request, scenario intent, optional reference files",
     output: "scenario_definition.json, scenario_definition_form.csv",
-    risk: "YAML과 자연어가 충돌하면 검증 노드로 넘깁니다.",
+    risk: "정의서에 없는 값을 임의 확정하지 않고 assumption으로 남겨 검증 단계에서 확인합니다.",
   },
-  validate: {
-    title: "Validation Agent",
-    purpose: "누락값, 서로 충돌하는 설정, KPI 산출에 필요한 로그 준비 여부를 점검합니다.",
-    input: "definition JSON + source files",
-    output: "pass/warn/fail checklist",
-    risk: "실험 목적과 파일 설정이 다르면 human review가 필요합니다.",
+  validation: {
+    title: "2. ScenarioValidationAgent",
+    purpose: "필수값 누락, 단위 오류, 물리적으로 불가능한 조건, 정의서 형식 불일치를 점검합니다.",
+    input: "scenario_definition JSON",
+    output: "validation pass/warn/fail, missing-field list",
+    risk: "속도·거리·시간 단위가 섞이면 KPI 결과가 왜곡되므로 단위 정규화가 핵심입니다.",
   },
-  plan: {
-    title: "YAML/PY + KPI Plan",
-    purpose: "OpenCDA 실행 명령과 공통 KPI 계산 명령을 run_id 폴더에 고정합니다.",
-    input: "validated definition",
-    output: "execution_plan.json, command list",
-    risk: "CARLA 실행은 무겁기 때문에 n8n에서는 승인/큐 등록까지만 담당합니다.",
+  build: {
+    title: "3. ExperimentBuildAgent",
+    purpose: "검증된 JSON을 OpenCDA YAML/PY 실행 파일과 KPI 실행 계획으로 변환합니다.",
+    input: "validated definition, scenario template, KPI contract",
+    output: "OpenCDA YAML/PY copy, execution_plan.json, command list",
+    risk: "원본 실험 파일은 보존하고 run_id별 복사본/manifest 기준으로 추적합니다.",
   },
-  queue: {
-    title: "Execution Queue",
-    purpose: "n8n이 run_id 기준으로 실험 요청을 큐에 넣고 상태를 추적합니다.",
-    input: "run_id + execution options",
-    output: "queued/prepared/running status",
-    risk: "동시에 여러 CARLA 실행을 시작하지 않도록 rate limit이 필요합니다.",
+  simulation: {
+    title: "4. SimulationRunAgent",
+    purpose: "CARLA/OpenCDA 실행, 로그 저장, data_dump 고정, 실패 패턴 감지를 담당합니다.",
+    input: "execution_plan.json, execute_simulation option",
+    output: "stdout/stderr log, latest data dump path, failure status",
+    risk: "CARLA 서버 상태와 포트 충돌을 감지하고 실패 시 run 기록에 남겨야 합니다.",
   },
-  status: {
-    title: "Status / Artifact API",
-    purpose: "manifest, 로그, 정의서, KPI 결과, 보고서 경로를 외부 UI와 n8n에 제공합니다.",
-    input: "run_id",
-    output: "pipeline/status response",
-    risk: "결과가 없을 때는 점수를 만들지 않고 준비 상태만 표시해야 합니다.",
+  kpi: {
+    title: "5. KPIAgent",
+    purpose: "인지, 제어, 교통 영향성, 주행 안전성 KPI를 동일 계약으로 계산합니다.",
+    input: "data dump, GT/prediction logs, vehicle states",
+    output: "MOTA/MOTP, accel variance, delay/flow, TTC/PET/RD",
+    risk: "시나리오별 비교가 아니라 알고리즘/조건별 의미가 맞도록 observation horizon을 고정해야 합니다.",
+  },
+  report: {
+    title: "6. ReportAgent",
+    purpose: "KPI 결과와 실행 근거를 모아 최종 Markdown 보고서를 생성합니다.",
+    input: "KPI results, manifest, artifacts",
+    output: "final report",
+    risk: "점수화 방향이 다른 KPI는 높을수록 좋게 역정규화한 뒤 통합해야 합니다.",
+  },
+  memory: {
+    title: "7. MemoryAgent",
+    purpose: "이전 실험과 비교하고, 다음 실험 조건과 개선 방향을 추천합니다.",
+    input: "current run record, previous run DB, KPI summary",
+    output: "comparison summary, recommendations, next experiment candidates",
+    risk: "같은 시나리오/같은 KPI 기준끼리만 비교하도록 run metadata를 확인합니다.",
   },
 };
 
@@ -101,10 +101,12 @@ function statusLabel(status) {
 
 function readinessScore(record, manifestStatus) {
   const status = record?.pipeline_status || manifestStatus || "";
-  if (status.includes("finished") && !status.includes("review")) return 88;
-  if (status.includes("review")) return 64;
+  if (status.includes("memory_recommended")) return 96;
+  if (status.includes("report_generated")) return 90;
+  if (status.includes("finished") && !status.includes("review")) return 82;
+  if (status.includes("review")) return 66;
   if (status.includes("queued") || status.includes("running")) return 58;
-  if (status.includes("prepared") || status.includes("ready")) return 46;
+  if (status.includes("prepared") || status.includes("ready")) return 48;
   if (status.includes("failed")) return 12;
   return null;
 }
@@ -158,7 +160,7 @@ async function loadHistory() {
       await selectRun(state.history[0].run_id);
     }
   } catch (error) {
-    addMessage("system", "WARN", `실험 이력을 불러오지 못했습니다. ${error.message}`);
+    addMessage("system", "WARN", `실험 이력을 불러오지 못했습니다: ${error.message}`);
   }
 }
 
@@ -195,7 +197,7 @@ async function selectRun(runId) {
     const data = await apiGet(`/pipeline/status/${encodeURIComponent(runId)}`);
     renderRunStatus(data);
   } catch (error) {
-    addMessage("system", "WARN", `run 상태를 불러오지 못했습니다. ${error.message}`);
+    addMessage("system", "WARN", `run 상태를 불러오지 못했습니다: ${error.message}`);
   }
 }
 
@@ -240,9 +242,7 @@ function renderArtifacts(artifacts) {
   const preferred = [
     "scenario_definition_form",
     "execution_plan",
-    "dashboard",
     "report",
-    "final_dashboard",
     "final_report",
     "execution_result",
     "scenario_alignment_review",
@@ -264,20 +264,23 @@ function renderArtifacts(artifacts) {
 
 function updateStages(status) {
   const doneMap = {
-    prepared_only: 4,
-    ready_for_execution: 5,
-    queued: 6,
-    running: 6,
-    execution_finished: 6,
-    execution_finished_needs_review: 6,
+    prepared_only: 3,
+    ready_for_execution: 3,
+    queued: 4,
+    running: 4,
+    execution_finished: 5,
+    execution_finished_needs_review: 5,
+    report_generated: 6,
+    memory_recommended: 7,
   };
-  const doneCount = doneMap[status] || (String(status).includes("prepared") ? 4 : 1);
-  $$(".stage").forEach((stage, index) => {
+  const doneCount = doneMap[status] || (String(status).includes("prepared") ? 3 : 1);
+  const stages = $$(".stage");
+  stages.forEach((stage, index) => {
     stage.classList.toggle("done", index < doneCount);
-    stage.classList.toggle("active", index === Math.min(doneCount, $$(".stage").length - 1));
+    stage.classList.toggle("active", index === Math.min(doneCount, stages.length - 1));
   });
 
-  const nodeOrder = ["webhook", "parse", "definition", "validate", "plan", "queue", "status"];
+  const nodeOrder = ["spec", "validation", "build", "simulation", "kpi", "report", "memory"];
   $$(".flow-node").forEach((node) => {
     const index = nodeOrder.indexOf(node.dataset.node);
     node.classList.toggle("done", index > -1 && index < doneCount);
@@ -293,7 +296,7 @@ function setScenario(id) {
 }
 
 function selectNode(id) {
-  const detail = nodeDetails[id] || nodeDetails.webhook;
+  const detail = nodeDetails[id] || nodeDetails.spec;
   state.selectedNode = id;
   $$(".flow-node").forEach((node) => node.classList.toggle("active", node.dataset.node === id));
   setText("#selectedNode", detail.title);
@@ -320,16 +323,16 @@ async function submitPrompt(event) {
   };
 
   addMessage("user", "USER", requestText);
-  addMessage("assistant", "AGENT", "n8n Webhook → LangGraph → 정의서 JSON → 검증 → 실행계획 순서로 run을 등록합니다.");
+  addMessage("assistant", "AGENT", "ScenarioSpecAgent → ScenarioValidationAgent → ExperimentBuildAgent → SimulationRunAgent → KPIAgent → ReportAgent → MemoryAgent 순서의 n8n 노드 그래프로 실행합니다.");
   setText("#runState", "BUSY");
-  selectNode("webhook");
+  selectNode("spec");
 
   try {
     const result = await apiPost("/pipeline/submit", body);
-    addMessage("assistant", "AGENT", `run_id ${result.run_id} 등록 완료. 상태: ${statusLabel(result.status)}`);
+    addMessage("assistant", "AGENT", `run_id ${result.run_id} 등록 완료. 현재 상태: ${statusLabel(result.status)}`);
     await loadHistory();
     await selectRun(result.run_id);
-    selectNode("status");
+    selectNode("build");
   } catch (error) {
     addMessage("system", "ERROR", `pipeline 등록 실패: ${error.message}`);
     setText("#runState", "FAIL");
@@ -370,7 +373,7 @@ function bindEvents() {
 async function init() {
   bindEvents();
   setScenario("scenario_1");
-  selectNode("webhook");
+  selectNode("spec");
   await checkHealth();
   await loadHistory();
   setInterval(updateClock, 1000);

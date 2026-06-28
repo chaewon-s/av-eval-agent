@@ -31,7 +31,9 @@ def write_json(path: Path, data: Dict[str, Any]) -> None:
 
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    human_readable_suffixes = {".md", ".csv"}
+    encoding = "utf-8-sig" if path.suffix.lower() in human_readable_suffixes else "utf-8"
+    path.write_text(text, encoding=encoding)
 
 
 def write_definition_form_csv(path: Path, definition_form: Dict[str, Any]) -> None:
@@ -113,7 +115,7 @@ def build_report_markdown(state: Dict[str, Any], copied_files: list[dict[str, An
         "",
         f"- 실험 실행 요청 감지: {intent.get('requested_actions', {}).get('run_simulation', False)}",
         f"- KPI 계산 요청 감지: {intent.get('requested_actions', {}).get('calculate_kpis', False)}",
-        f"- 대시보드 생성 요청 감지: {intent.get('requested_actions', {}).get('generate_dashboard', False)}",
+        f"- 보고서 생성 요청 감지: {intent.get('requested_actions', {}).get('generate_report', False)}",
         "",
         "## 4. 검증 결과",
         "",
@@ -147,64 +149,6 @@ def build_report_markdown(state: Dict[str, Any], copied_files: list[dict[str, An
     return "\n".join(lines) + "\n"
 
 
-def build_dashboard_html(state: Dict[str, Any]) -> str:
-    scenario = state.get("scenario_definition", {})
-    kpi_plan = state.get("kpi_plan", {})
-    warnings = state.get("validation_warnings", [])
-    warning_items = "\n".join(f"<li>{warning}</li>" for warning in warnings) or "<li>없음</li>"
-    axes = kpi_plan.get("axes", {})
-    axis_cards = "\n".join(
-        f"<div class='card'><h3>{axis}</h3><p>{', '.join(metrics)}</p></div>"
-        for axis, metrics in axes.items()
-    )
-
-    return f"""<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AV Evaluation Agent Run</title>
-  <style>
-    body {{ margin: 0; font-family: Arial, sans-serif; background: #f4f7fb; color: #172033; }}
-    header {{ background: #76001f; color: white; padding: 22px 32px; }}
-    main {{ padding: 24px 32px; display: grid; gap: 18px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }}
-    .card {{ background: white; border: 1px solid #d8dee9; border-radius: 10px; padding: 18px; box-shadow: 0 8px 20px rgba(23,32,51,.06); }}
-    h1, h2, h3 {{ margin-top: 0; }}
-    code {{ background: #eef2f7; padding: 2px 5px; border-radius: 4px; }}
-    li {{ margin: 6px 0; }}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>AV Evaluation AI Agent</h1>
-    <p>LangGraph + n8n 기반 자율주행 평가 자동화 실행 계획</p>
-  </header>
-  <main>
-    <section class="card">
-      <h2>시나리오 정의</h2>
-      <p><b>ID:</b> {scenario.get('scenario_id', 'unknown')}</p>
-      <p><b>Type:</b> {scenario.get('scenario_type', 'unknown')}</p>
-      <p><b>Definition:</b> {scenario.get('definition_format', 'unknown')}</p>
-      <p><b>Status:</b> {state.get('status', 'unknown')}</p>
-    </section>
-    <section class="grid">
-      {axis_cards}
-    </section>
-    <section class="card">
-      <h2>검증 경고</h2>
-      <ul>{warning_items}</ul>
-    </section>
-    <section class="card">
-      <h2>다음 단계</h2>
-      <p>이 화면은 실행 계획 preview입니다. CARLA/OpenCDA worker 연결 후 로그, KPI 그래프, 영상, radar plot이 같은 run_id 아래 자동 저장됩니다.</p>
-    </section>
-  </main>
-</body>
-</html>
-"""
-
-
 def persist_agent_run(state: Dict[str, Any], project_root: Path) -> Dict[str, Any]:
     run_id = state["run_id"]
     run_dir = run_dir_for(project_root, run_id)
@@ -222,7 +166,6 @@ def persist_agent_run(state: Dict[str, Any], project_root: Path) -> Dict[str, An
     experiment_plan_path = run_dir / "experiment_plan.json"
     kpi_plan_path = run_dir / "kpi_plan.json"
     report_path = run_dir / "report" / "evaluation_agent_plan.md"
-    dashboard_path = run_dir / "dashboard" / "index.html"
 
     write_json(scenario_path, scenario_definition)
     if definition_form:
@@ -236,7 +179,6 @@ def persist_agent_run(state: Dict[str, Any], project_root: Path) -> Dict[str, An
         "agent_state": str(agent_state_path),
         "experiment_plan": str(experiment_plan_path),
         "kpi_plan": str(kpi_plan_path),
-        "dashboard": str(dashboard_path),
         "report": str(report_path),
     }
     if definition_form:
@@ -260,12 +202,10 @@ def persist_agent_run(state: Dict[str, Any], project_root: Path) -> Dict[str, An
     }
     write_json(manifest_path, manifest)
     write_text(report_path, build_report_markdown(state, copied_files))
-    write_text(dashboard_path, build_dashboard_html(state))
 
     return {
         "run_dir": str(run_dir),
         "manifest": str(manifest_path),
-        "dashboard": str(dashboard_path),
         "report": str(report_path),
         "scenario_definition_form": str(form_json_path) if definition_form else None,
         "scenario_definition_form_csv": str(form_csv_path) if definition_form else None,

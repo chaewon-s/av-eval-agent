@@ -1,0 +1,134 @@
+{
+  "id": "AV_EVAL_AGENT_ASYNC_SUBMIT",
+  "name": "AV Evaluation Agent - Async CARLA Run Submitter",
+  "description": "Async submitter for long CARLA/OpenCDA simulation runs. Returns run_id/status_url immediately and lets backend worker handle execution.",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "av-eval-agent-async",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "AsyncWebhookStart",
+      "name": "When scenario request received (async)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        0
+      ],
+      "webhookId": "av-eval-agent-async-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $input.first().json;\nconst body = incoming.body ?? incoming;\nconst query = incoming.query ?? {};\nconst headers = incoming.headers ?? {};\nconst baseUrl = body.base_url || query.base_url || 'http://host.docker.internal:8010';\nconst userRequest = body.user_request || body.chatInput || body.message || body.prompt || body.text || query.user_request || 'Generate an autonomous-driving scenario definition and execute the evaluation pipeline.';\nconst workflowToken = (typeof $vars !== 'undefined' && $vars.AV_AGENT_WEBHOOK_TOKEN)\n  ? String($vars.AV_AGENT_WEBHOOK_TOKEN)\n  : null;\nconst requiredToken = workflowToken || body.required_token || query.required_token || null;\nconst providedToken = headers['x-av-agent-token'] || headers['X-AV-Agent-Token'] || body.auth_token || query.auth_token || null;\nif (requiredToken && providedToken !== requiredToken) {\n  return [{ json: { failed: true, response_code: 401, error: 'Unauthorized scenario request. Missing or invalid x-av-agent-token/auth_token.', base_url: baseUrl, security: { auth_required: true, auth_mode: 'token_checked' } } }];\n}\nconst reproducibility = {\n  autotune_model: body.autotune_model || query.autotune_model || 'gpt-4.1-mini',\n  autotune_temperature: body.autotune_temperature ?? query.autotune_temperature ?? 0.2,\n  autotune_seed: body.autotune_seed ?? query.autotune_seed ?? 20260628,\n  model_version_note: body.model_version_note || query.model_version_note || 'Pinned request metadata for reproducible research logging.'\n};\nreturn [{ json: {\n  failed: false,\n  response_code: 202,\n  base_url: baseUrl,\n  security: { auth_required: Boolean(requiredToken), auth_mode: requiredToken ? 'token_checked' : 'not_configured' },\n  reproducibility,\n  request: {\n    user_request: userRequest,\n    execute_simulation: body.execute_simulation ?? true,\n    run_kpis: body.run_kpis ?? true,\n    apply_ml: body.apply_ml ?? false,\n    record: body.record ?? false,\n    background: true,\n    autotune_model: reproducibility.autotune_model,\n    autotune_temperature: reproducibility.autotune_temperature,\n    autotune_seed: reproducibility.autotune_seed,\n    model_version_note: reproducibility.model_version_note\n  }\n} }];"
+      },
+      "id": "NormalizeAsyncRequest",
+      "name": "Normalize and auth-check request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nasync function requestWithRetry(options, attempts = 3) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = 500 * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\ntry {\n  const health = await requestWithRetry({ method: 'GET', url: `${ctx.base_url}/health`, json: true, timeout: 10000 }, 3);\n  return [{ json: { ...ctx, backend_health: health } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, response_code: 503, failed_agent: 'BackendRuntimeGuard', error: `Backend health check failed after retries: ${String(error.message || error)}` } }];\n}"
+      },
+      "id": "AsyncBackendGuard",
+      "name": "Backend runtime guard with retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nasync function requestWithRetry(options, attempts = 3) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = 1000 * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/pipeline/submit`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: {\n      user_request: ctx.request.user_request,\n      execute_simulation: ctx.request.execute_simulation,\n      run_kpis: ctx.request.run_kpis,\n      apply_ml: ctx.request.apply_ml,\n      record: ctx.request.record,\n      background: true\n    },\n    json: true,\n    timeout: 120000\n  }, 3);\n  const executionRequested = Boolean(ctx.request.execute_simulation || ctx.request.run_kpis);\n  return [{ json: {\n    success: true,\n    response_code: 202,\n    mode: 'async_background_pipeline',\n    run_id: data.run_id,\n    status: data.status,\n    message: executionRequested\n      ? 'Run accepted. CARLA/OpenCDA execution, KPI calculation, diagnosis, quality gate, readiness audit, and report generation continue in the backend background worker.'\n      : 'Run prepared only. No background execution was requested because execute_simulation=false and run_kpis=false.',\n    status_url: data.urls?.status || `${ctx.base_url}/pipeline/status/${data.run_id}`,\n    result_url: data.urls?.run_result || `${ctx.base_url}/run/result/${data.run_id}`,\n    api_docs: data.urls?.api_docs || `${ctx.base_url}/docs`,\n    backend_response: data,\n    security: ctx.security || null,\n    reproducibility: ctx.reproducibility || null\n  } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, response_code: 502, failed_agent: 'AsyncPipelineSubmitter', error: String(error.message || error) } }];\n}"
+      },
+      "id": "SubmitPipelineAsync",
+      "name": "Submit CARLA evaluation pipeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.response_code || ($json.failed ? 500 : 202) }}"
+        }
+      },
+      "id": "RespondAsyncAccepted",
+      "name": "Return run_id and status URL",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "When scenario request received (async)": {
+      "main": [
+        [
+          {
+            "node": "Normalize and auth-check request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize and auth-check request": {
+      "main": [
+        [
+          {
+            "node": "Backend runtime guard with retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend runtime guard with retry": {
+      "main": [
+        [
+          {
+            "node": "Submit CARLA evaluation pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit CARLA evaluation pipeline": {
+      "main": [
+        [
+          {
+            "node": "Return run_id and status URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "timezone": "Asia/Seoul"
+  },
+  "pinData": {}
+}

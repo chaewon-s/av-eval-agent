@@ -18,6 +18,10 @@ av_eval_agent/.venv/
 # Runtime logs and generated agent state
 *.log
 av_eval_agent/data/
+.env
+.env.*
+av_eval_agent/.env
+av_eval_agent/.env.*
 
 # OpenCDA/CARLA generated outputs
 data_dumping/

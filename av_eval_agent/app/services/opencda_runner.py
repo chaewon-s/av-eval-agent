@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import subprocess
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
+
+import yaml
 
 from app.services.run_artifact_tracker import (
     datadump_title_for_scenario,
@@ -39,6 +42,7 @@ def build_opencda_command(
     *,
     apply_ml: bool = False,
     record: bool = False,
+    config_path: str | Path | None = None,
 ) -> List[str]:
     """OpenCDA 실행 명령을 구성한다.
 
@@ -58,12 +62,108 @@ def build_opencda_command(
         command.append("-ApplyMl")
     if record:
         command.append("-Record")
+    if config_path:
+        command.extend(["-Config", str(config_path)])
     return command
 
 
+def scenario_module_path(project_root: Path, test_scenario: str) -> Path:
+    return project_root / "opencda" / "scenario_testing" / f"{test_scenario}.py"
+
+
+def scenario_config_path(project_root: Path, test_scenario: str) -> Path:
+    return project_root / "opencda" / "scenario_testing" / "config_yaml" / f"{test_scenario}.yaml"
+
+
+def generated_config_dir(project_root: Path, run_id: str) -> Path:
+    return project_root / "av_eval_agent" / "data" / "runs" / run_id / "generated" / "config_yaml"
+
+
+def generated_config_path(project_root: Path, run_id: str, test_scenario: str) -> Path:
+    return generated_config_dir(project_root, run_id) / f"{test_scenario}.yaml"
+
+
+def _walk_lidar_configs(node: Any) -> list[dict[str, Any]]:
+    configs: list[dict[str, Any]] = []
+    if isinstance(node, dict):
+        if isinstance(node.get("lidar"), dict):
+            configs.append(node["lidar"])
+        for value in node.values():
+            configs.extend(_walk_lidar_configs(value))
+    elif isinstance(node, list):
+        for item in node:
+            configs.extend(_walk_lidar_configs(item))
+    return configs
+
+
+def _apply_run_local_stability_patch(target: Path, test_scenario: str) -> dict[str, Any]:
+    """Clamp unstable sensor settings in generated YAML only.
+
+    Scenario 2 uses very dense semantic LiDAR settings for visualization. In
+    repeated CARLA/OpenCDA runs this can produce a semantic point/label length
+    mismatch inside perception_manager.py. The canonical scenario YAML stays
+    untouched; only the copied run-local YAML is reduced to a stable evaluation
+    profile.
+    """
+
+    if test_scenario not in {"scenario2", "scenario2_v2x"}:
+        return {"applied": False, "reason": "not_scenario2"}
+
+    data = yaml.safe_load(target.read_text(encoding="utf-8")) or {}
+    changes: list[dict[str, Any]] = []
+    for lidar in _walk_lidar_configs(data):
+        old_pps = lidar.get("points_per_second")
+        old_freq = lidar.get("rotation_frequency")
+        if isinstance(old_pps, (int, float)) and old_pps > 1_000_000:
+            lidar["points_per_second"] = 1_000_000
+            changes.append({"field": "points_per_second", "from": old_pps, "to": 1_000_000})
+        if isinstance(old_freq, (int, float)) and old_freq > 20:
+            lidar["rotation_frequency"] = 20
+            changes.append({"field": "rotation_frequency", "from": old_freq, "to": 20})
+
+    if changes:
+        target.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {
+        "applied": bool(changes),
+        "reason": "scenario2_semantic_lidar_stability",
+        "changes": changes,
+    }
+
+
+def ensure_generated_config(project_root: Path, run_id: str, test_scenario: str) -> Path:
+    """Copy canonical YAML into the run folder once, then execute that copy.
+
+    AutoTuneAgent can safely patch this generated YAML without touching the
+    canonical OpenCDA scenario files.
+    """
+
+    source = scenario_config_path(project_root, test_scenario)
+    target_dir = generated_config_dir(project_root, run_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    default_source = source.parent / "default.yaml"
+    default_target = target_dir / "default.yaml"
+    if default_source.exists() and not default_target.exists():
+        shutil.copy2(default_source, default_target)
+
+    target = generated_config_path(project_root, run_id, test_scenario)
+    if not target.exists():
+        shutil.copy2(source, target)
+        patch_result = _apply_run_local_stability_patch(target, test_scenario)
+        if patch_result.get("applied"):
+            patch_meta = target.with_suffix(".stability_patch.json")
+            import json
+
+            patch_meta.write_text(
+                json.dumps(patch_result, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+    return target
+
+
 def validate_runner_target(project_root: Path, test_scenario: str) -> None:
-    scenario_py = project_root / "opencda" / "scenario_testing" / f"{test_scenario}.py"
-    scenario_yaml = project_root / "opencda" / "scenario_testing" / "config_yaml" / f"{test_scenario}.yaml"
+    scenario_py = scenario_module_path(project_root, test_scenario)
+    scenario_yaml = scenario_config_path(project_root, test_scenario)
     if not scenario_py.exists():
         raise FileNotFoundError(f"OpenCDA scenario module이 없습니다: {scenario_py}")
     if not scenario_yaml.exists():
@@ -85,8 +185,10 @@ def prepare_opencda_execution_plan(
     commands: list[dict[str, Any]] = []
     missing: list[str] = []
     for test_scenario in infer_test_scenarios(manifest):
+        config_path: Path | None = None
         try:
             validate_runner_target(project_root, test_scenario)
+            config_path = ensure_generated_config(project_root, run_id, test_scenario)
             valid = True
         except FileNotFoundError as exc:
             valid = False
@@ -101,7 +203,15 @@ def prepare_opencda_execution_plan(
                 "expected_data_dump_title": datadump_title_for_scenario(project_root, test_scenario)
                 if valid
                 else None,
-                "command": build_opencda_command(project_root, test_scenario, apply_ml=apply_ml, record=record),
+                "canonical_config_path": str(scenario_config_path(project_root, test_scenario)) if valid else None,
+                "generated_config_path": str(config_path) if config_path else None,
+                "command": build_opencda_command(
+                    project_root,
+                    test_scenario,
+                    apply_ml=apply_ml,
+                    record=record,
+                    config_path=config_path,
+                ),
                 "log_path": str(log_path),
             }
         )

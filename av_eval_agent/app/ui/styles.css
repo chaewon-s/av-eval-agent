@@ -346,7 +346,7 @@ h1 {
 
 .alarm-strip {
   display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  grid-template-columns: repeat(7, minmax(96px, 1fr));
   gap: 8px;
   margin-top: 8px;
   padding: 10px;

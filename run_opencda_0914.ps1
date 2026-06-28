@@ -6,6 +6,8 @@ param(
     [switch]$ApplyMl,
     [switch]$Record,
 
+    [string]$Config,
+
     [string]$Python = "$env:LOCALAPPDATA\Programs\Python\Python38\python.exe"
 )
 
@@ -29,6 +31,9 @@ if ($ApplyMl) {
 }
 if ($Record) {
     $ArgsList += "--record"
+}
+if ($Config) {
+    $ArgsList += @("--config", $Config)
 }
 
 & $Python @ArgsList

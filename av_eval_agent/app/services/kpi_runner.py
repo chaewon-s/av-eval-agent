@@ -44,6 +44,24 @@ def get_config_patterns(scenario_id: str) -> list[str]:
     )
 
 
+def _run_generated_config_dir(project_root: Path, run_id: str) -> Path:
+    return project_root / "av_eval_agent" / "data" / "runs" / run_id / "generated" / "config_yaml"
+
+
+def _resolve_kpi_config_paths(project_root: Path, run_id: str, scenario_id: str) -> list[Path]:
+    """Prefer run-local generated YAMLs so tuning never mutates canonical configs."""
+
+    config_paths: list[Path] = []
+    generated_dir = _run_generated_config_dir(project_root, run_id)
+
+    for pattern in get_config_patterns(scenario_id):
+        canonical_path = project_root / pattern
+        generated_path = generated_dir / canonical_path.name
+        config_paths.append(generated_path if generated_path.exists() else canonical_path)
+
+    return config_paths
+
+
 def _build_universal_kpi_command(
     project_root: Path,
     run_id: str,
@@ -64,9 +82,9 @@ def _build_universal_kpi_command(
         str(output_dir),
     ]
 
-    config_patterns = get_config_patterns(scenario_id)
-    for pattern in config_patterns:
-        command.extend(["--config", str(project_root / pattern)])
+    config_paths = _resolve_kpi_config_paths(project_root, run_id, scenario_id)
+    for config_path in config_paths:
+        command.extend(["--config", str(config_path)])
 
     return {
         "kind": "standard_kpi_calculation",
@@ -74,7 +92,11 @@ def _build_universal_kpi_command(
         "metrics": STANDARD_KPI_CONTRACT,
         "script": str(script_path),
         "valid": script_path.exists(),
-        "config_patterns": [str(project_root / pattern) for pattern in config_patterns],
+        "config_paths": [str(config_path) for config_path in config_paths],
+        "uses_generated_config": any(
+            str(config_path).startswith(str(_run_generated_config_dir(project_root, run_id)))
+            for config_path in config_paths
+        ),
         "command": command,
         "output_dir": str(output_dir),
         "log_path": str(project_root / "av_eval_agent" / "data" / "runs" / run_id / "logs" / "kpi_standard_all.log"),

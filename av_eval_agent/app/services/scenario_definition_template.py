@@ -396,6 +396,7 @@ def build_scenario_definition_form(
                 "항목": template_row["항목"],
                 "요소": template_row["요소"],
                 "설명": template_row["설명"],
+                "value_key": key,
                 "시험 시나리오": values.get(key, "미정"),
             }
         )

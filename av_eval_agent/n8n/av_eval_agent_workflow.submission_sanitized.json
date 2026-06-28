@@ -1,0 +1,836 @@
+[
+  {
+    "updatedAt": "2026-06-27T11:32:16.223Z",
+    "createdAt": "2026-06-25T11:28:21.563Z",
+    "id": "AV_EVALUATION_AGENT_ORCHESTRATION_LAYER",
+    "name": "AV Evaluation Agent - n8n Orchestration Layer",
+    "description": "n8n orchestration layer for the autonomous-vehicle evaluation agent. Actual agent intelligence runs in the FastAPI backend. Long CARLA/OpenCDA runs are submitted via the separate async workflow with webhook path /webhook/av-eval-agent-async.",
+    "active": false,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "av-eval-agent",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "WebhookStart",
+        "name": "When scenario request received",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "webhookId": "av-eval-agent-webhook",
+        "position": [
+          -896,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const incoming = $input.first().json;\nconst body = incoming.body ?? incoming;\nconst query = incoming.query ?? {};\nconst headers = incoming.headers ?? {};\nconst DEFAULT_REVIEWER = body.default_reviewer_name || query.default_reviewer_name || 'Human Reviewer';\nconst humanFeedback = body.human_feedback || body.feedback || query.human_feedback || query.feedback || null;\nconst previousRunId = body.previous_run_id || body.parent_run_id || query.previous_run_id || null;\nconst chatInput = body.chatInput || body.message || body.prompt || body.text || body.user_request || query.user_request;\nconst reviewUserName = body.review_user_name || body.slack_user_name || query.review_user_name || query.slack_user_name || DEFAULT_REVIEWER;\nconst reviewUserId = body.review_user_id || body.slack_user_id || query.review_user_id || query.slack_user_id || null;\nconst slackWorkspaceUrl = body.slack_workspace_url || query.slack_workspace_url || null;\nconst slackChannelId = body.slack_channel_id || query.slack_channel_id || null;\nconst baseUrl = body.base_url || query.base_url || 'http://host.docker.internal:8010';\nconst n8nPublicUrl = body.n8n_public_url || query.n8n_public_url || 'http://127.0.0.1:5678';\nconst userRequest = chatInput || (humanFeedback\n  ? `Revise autonomous-driving evaluation run ${previousRunId || '(unknown run)'} using this human feedback: ${humanFeedback}`\n  : 'Generate an autonomous driving scenario definition and prepare KPI calculation.');\nconst workflowToken = (typeof $vars !== 'undefined' && $vars.AV_AGENT_WEBHOOK_TOKEN)\n  ? String($vars.AV_AGENT_WEBHOOK_TOKEN)\n  : null;\nconst requiredToken = workflowToken || body.required_token || query.required_token || null;\nconst providedToken = headers['x-av-agent-token'] || headers['X-AV-Agent-Token'] || body.auth_token || query.auth_token || null;\nif (requiredToken && providedToken !== requiredToken) {\n  return [{ json: {\n    base_url: baseUrl,\n    n8n_public_url: n8nPublicUrl,\n    request: { user_request: userRequest },\n    agents: {},\n    failed: true,\n    failed_agent: 'WebhookAuthGate',\n    response_code: 401,\n    error: 'Unauthorized scenario request. Missing or invalid x-av-agent-token/auth_token.',\n    security: { auth_required: true, auth_mode: 'x-av-agent-token or auth_token' }\n  } }];\n}\nconst requestedExecuteSimulation = body.execute_simulation ?? false;\nconst requestedRunKpis = body.run_kpis ?? true;\nconst forceSyncExecution = body.force_sync_execution ?? query.force_sync_execution ?? false;\nconst syncExecutionSuppressed = Boolean(requestedExecuteSimulation && !forceSyncExecution);\nreturn [{ json: {\n  base_url: baseUrl,\n  n8n_public_url: n8nPublicUrl,\n  request: {\n    user_request: userRequest,\n    execute_simulation: forceSyncExecution ? requestedExecuteSimulation : false,\n    run_kpis: syncExecutionSuppressed ? false : requestedRunKpis,\n    apply_ml: body.apply_ml ?? false,\n    record: body.record ?? false,\n    include_kpis: body.include_kpis ?? true,\n    review_required: body.review_required ?? true,\n    background: body.background ?? true,\n    force_sync_execution: forceSyncExecution,\n    requested_execute_simulation: requestedExecuteSimulation,\n    requested_run_kpis: requestedRunKpis,\n    slack_webhook_url: body.slack_webhook_url || null,\n    slack_workspace_url: slackWorkspaceUrl,\n    slack_channel_id: slackChannelId,\n    review_user_name: reviewUserName,\n    review_user_id: reviewUserId,\n    human_feedback: humanFeedback,\n    previous_run_id: previousRunId,\n    feedback_action: body.feedback_action || query.feedback_action || (humanFeedback ? 'revise' : null),\n    autotune_model: body.autotune_model || query.autotune_model || 'gpt-4.1-mini',\n    autotune_temperature: body.autotune_temperature ?? query.autotune_temperature ?? 0.2,\n    autotune_seed: body.autotune_seed ?? query.autotune_seed ?? 20260628,\n    model_version_note: body.model_version_note || query.model_version_note || 'Pinned request metadata for reproducible research logging.'\n  },\n  long_run_guard: syncExecutionSuppressed ? {\n    status: 'sync_execution_suppressed',\n    reason: 'The report-only orchestration webhook does not hold an HTTP connection for CARLA/OpenCDA execution. Use the async webhook for real simulation runs, or set force_sync_execution=true for local debugging only.',\n    async_webhook_path: '/webhook/av-eval-agent-async',\n    async_payload_hint: {\n      user_request: userRequest,\n      execute_simulation: requestedExecuteSimulation,\n      run_kpis: requestedRunKpis,\n      record: body.record ?? false,\n      background: true\n    }\n  } : null,\n  security: { auth_required: Boolean(requiredToken), auth_mode: requiredToken ? 'token_checked' : 'not_configured' },\n  reproducibility: {\n    autotune_model: body.autotune_model || query.autotune_model || 'gpt-4.1-mini',\n    autotune_temperature: body.autotune_temperature ?? query.autotune_temperature ?? 0.2,\n    autotune_seed: body.autotune_seed ?? query.autotune_seed ?? 20260628,\n    model_version_note: body.model_version_note || query.model_version_note || 'Pinned request metadata for reproducible research logging.'\n  },\n  agents: {},\n  failed: false,\n  error: null\n}}];"
+        },
+        "id": "NormalizeRequest",
+        "name": "Normalize chat/webhook request",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -624,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nconst fallbackScenarioPack = {\n  source: 'scenario definition form: 6-layer autonomous driving test format',\n  required_sections: ['road geometry', 'traffic infrastructure', 'temporary modifications', 'dynamic actors', 'environment', 'digital/V2X layer'],\n  actor_fields: ['role', 'vehicle_type', 'spawn_position', 'destination', 'speed', 'lane', 'movement', 'v2x.enabled', 'sensing.perception.activate'],\n  default_policy: 'If a natural-language scenario omits a value, fill it with a conservative normal value and mark it as inferred.'\n};\ntry {\n  const packs = await requestWithRetry({\n    method: 'GET',\n    url: `${ctx.base_url}/agent/knowledge-packs`,\n    json: true,\n    timeout: 30000\n  });\n  return [{ json: {\n    ...ctx,\n    knowledge_packs: packs,\n    definition_knowledge: packs.scenario_definition_pack || fallbackScenarioPack,\n    kpi_standard_pack: packs.kpi_standard_pack || ctx.kpi_standard_pack || null\n  } }];\n} catch (error) {\n  return [{ json: {\n    ...ctx,\n    definition_knowledge: fallbackScenarioPack,\n    knowledge_pack_warning: `Backend knowledge-pack endpoint unavailable; using embedded fallback: ${String(error.message || error)}`\n  } }];\n}"
+        },
+        "id": "DefinitionKnowledgePack",
+        "name": "Scenario definition knowledge pack",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -336,
+          -224
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nconst fallbackKpiPack = {\n  perception: ['MOTA', 'MOTP'],\n  traffic_impact: ['Progress-adjusted Delay', 'Flow Efficiency'],\n  driving_safety: ['min 2D TTC', 'PET', 'Required Deceleration'],\n  control: ['Acceleration Variance max-window', 'Yaw-rate Residual RMS'],\n  score_direction: { higher_is_better: ['MOTA', 'Flow Efficiency', 'TTC', 'PET'], lower_is_better: ['MOTP', 'Delay', 'Required Deceleration', 'Acceleration Variance', 'Yaw-rate Residual RMS'] },\n  observation_policy: {\n    perception: 'Evaluate algorithm performance over matched observation horizons, not V2X labels.',\n    control: 'Use event-bounded or equal-length windows to avoid post-event dilution.',\n    traffic: 'Use progress-adjusted delay and route completion for incomplete trips.',\n    safety: 'Use scenario-appropriate 1D/2D TTC, PET, and recognition-time required deceleration.'\n  }\n};\nconst pack = ctx.kpi_standard_pack || ctx.knowledge_packs?.kpi_standard_pack || fallbackKpiPack;\nreturn [{ json: { ...ctx, kpi_standard_pack: pack } }];"
+        },
+        "id": "KPIStandardPack",
+        "name": "KPI standard knowledge pack",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -80,
+          -224
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\ntry {\n  const health = await requestWithRetry({ method: 'GET', url: `${ctx.base_url}/health`, json: true, timeout: 10000 });\n  return [{ json: { ...ctx, backend_health: health } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'BackendRuntimeGuard', error: `Backend health check failed: ${String(error.message || error)}` } }];\n}"
+        },
+        "id": "BackendRuntimeGuard",
+        "name": "Backend runtime guard",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          192,
+          -224
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\ntry {\n  const data = await requestWithRetry({\n    method: 'GET',\n    url: `${ctx.base_url}/agent/tools`,\n    json: true,\n    timeout: 30000\n  });\n  return [{ json: { ...ctx, tool_registry: data } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'AgentToolRegistry', error: String(error.message || error) } }];\n}"
+        },
+        "id": "ToolRegistry",
+        "name": "Load AV Agent tool registry",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          -224
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (ctx.failed) return [{ json: ctx }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/scenario-spec`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { user_request: ctx.request.user_request },\n    json: true,\n    timeout: 120000\n  });\n  return [{ json: { ...ctx, run_id: data.run_id, agents: { ...ctx.agents, ScenarioSpecAgent: data }, scenario_definition: data.scenario_definition } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'ScenarioSpecAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "ScenarioSpecAgent",
+        "name": "1. ScenarioSpecAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -64,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (ctx.failed) return [{ json: ctx }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/scenario-validation/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: {},\n    json: true,\n    timeout: 120000\n  });\n  const errors = data.validation_errors || [];\n  return [{ json: { ...ctx, agents: { ...ctx.agents, ScenarioValidationAgent: data }, failed: errors.length > 0, failed_agent: errors.length > 0 ? 'ScenarioValidationAgent' : ctx.failed_agent, error: errors.length > 0 ? errors.join('; ') : ctx.error } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'ScenarioValidationAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "ScenarioValidationAgent",
+        "name": "2. ScenarioValidationAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (ctx.failed) return [{ json: ctx }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/experiment-build/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { include_kpis: ctx.request.include_kpis, apply_ml: ctx.request.apply_ml, record: ctx.request.record },\n    json: true,\n    timeout: 120000\n  });\n  return [{ json: { ...ctx, agents: { ...ctx.agents, ExperimentBuildAgent: data }, execution_plan: data.execution_plan } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'ExperimentBuildAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "ExperimentBuildAgent",
+        "name": "3. ExperimentBuildAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          512,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (ctx.failed) return [{ json: ctx }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/simulation-run/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { execute_simulation: ctx.request.execute_simulation, run_kpis: false, apply_ml: ctx.request.apply_ml, record: ctx.request.record },\n    json: true,\n    timeout: 1800000\n  });\n  return [{ json: { ...ctx, agents: { ...ctx.agents, SimulationRunAgent: data } } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'SimulationRunAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "SimulationRunAgent",
+        "name": "4. SimulationRunAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (ctx.failed) return [{ json: ctx }];\nif (!ctx.request.run_kpis) {\n  return [{ json: { ...ctx, agents: { ...ctx.agents, KPIAgent: { agent: 'KPIAgent', status: 'skipped_by_request' } } } }];\n}\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/kpi/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { execute_simulation: false, run_kpis: true, apply_ml: ctx.request.apply_ml, record: ctx.request.record },\n    json: true,\n    timeout: 1800000\n  });\n  return [{ json: { ...ctx, agents: { ...ctx.agents, KPIAgent: data } } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'KPIAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "KPIAgent",
+        "name": "5. KPIAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1072,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (!ctx.run_id) return [{ json: { ...ctx, failed: true, failed_agent: ctx.failed_agent || 'ReportAgent', error: ctx.error || 'Missing run_id for report generation' } }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/report/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { previous_failed_agent: ctx.failed_agent || null, previous_error: ctx.error || null },\n    json: true,\n    timeout: 120000\n  });\n  return [{ json: { ...ctx, agents: { ...ctx.agents, ReportAgent: data } } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'ReportAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "ReportAgent",
+        "name": "6. ReportAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1984,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (!ctx.run_id) return [{ json: ctx }];\ntry {\n  const data = await requestWithRetry({\n    method: 'GET',\n    url: `${ctx.base_url}/agent/memory/${ctx.run_id}`,\n    json: true,\n    timeout: 120000\n  });\n  return [{ json: { ...ctx, agents: { ...ctx.agents, MemoryAgent: data }, memory: data } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'MemoryAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "MemoryAgent",
+        "name": "7. MemoryAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2272,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (!ctx.run_id) return [{ json: ctx }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/autotune/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: {\n      enabled: ctx.request.autotune ?? true,\n      apply_patches: ctx.request.autotune_apply_patches ?? false,\n      max_iterations: ctx.request.autotune_max_iterations ?? 1,\n      model: ctx.request.autotune_model || 'gpt-4.1-mini',\n      temperature: ctx.request.autotune_temperature ?? 0.2,\n      seed: ctx.request.autotune_seed ?? 20260628,\n      model_version_note: ctx.request.model_version_note || 'Pinned request metadata for reproducible research logging.',\n      notes: ctx.request.autotune_notes || ctx.request.human_feedback || ctx.error || null\n    },\n    json: true,\n    timeout: 120000\n  });\n  const decision = data.decision || {};\n  return [{ json: { ...ctx, agents: { ...ctx.agents, AutoTuneAgent: data }, autotune: data, human_review_hint: {\n    autotune_decision: decision.decision,\n    autotune_reason: decision.reason,\n    proposed_patches: decision.patches || [],\n    rejected_patches: decision.rejected_patches || [],\n    next_step: data.next_step\n  } } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'AutoTuneAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "AutoTuneAgent",
+        "name": "8. GPT AutoTuneAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2544,
+          80
+        ],
+        "notesInFlow": true,
+        "notes": "Calls the backend GPT/fallback AutoTuneAgent. It proposes bounded YAML patches for the next CARLA/OpenCDA run and forwards them into the Slack human-review loop."
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nconst agentSummary = Object.fromEntries(Object.entries(ctx.agents || {}).map(([name, value]) => [name, value?.status || value?.agent || 'done']));\nreturn [{ json: {\n  success: !ctx.failed,\n  run_id: ctx.run_id || null,\n  failed_agent: ctx.failed_agent || null,\n  error: ctx.error || null,\n  response_code: ctx.response_code || (ctx.failed_agent === 'WebhookAuthGate' ? 401 : (ctx.failed ? 500 : 200)),\n  backend_health: ctx.backend_health || null,\n  long_run_guard: ctx.long_run_guard || null,\n  security: ctx.security || null,\n  reproducibility: ctx.reproducibility || null,\n  preflight: ctx.preflight || null,\n  tool_count: ctx.tool_registry?.tools?.length || 0,\n  agent_summary: agentSummary,\n  status_url: ctx.run_id ? `${ctx.base_url}/pipeline/status/${ctx.run_id}` : null,\n  result_url: ctx.run_id ? `${ctx.base_url}/run/result/${ctx.run_id}` : null,\n  failure_diagnosis: ctx.failure_diagnosis || null,\n  quality_gate: ctx.quality_gate || null,\n  research_readiness: ctx.research_readiness || ctx.agents?.ResearchReadinessAgent || null,\n  human_review: ctx.human_review || null,\n  slack_notification: ctx.slack_notification || null,\n  feedback_loop: ctx.feedback_loop || null,\n  report_agent: ctx.agents?.ReportAgent || null,\n  memory_agent: ctx.memory || null\n}}];"
+        },
+        "id": "StructureFinalResponse",
+        "name": "Structure final response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3664,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "av-eval-agent/feedback",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "WebhookFeedback",
+        "name": "When human feedback received",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "webhookId": "av-eval-agent-feedback-webhook",
+        "position": [
+          -896,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed_agent === 'WebhookAuthGate') {\n  return [{ json: { ...ctx, human_review: { required: false, status: 'skipped_auth_failure', submission_gate: 'blocked_by_auth', submission_blocked: true, reason: ctx.error || 'Unauthorized request' } } }];\n}\nconst previousReview = ctx.human_review || {};\nconst DEFAULT_REVIEWER = ctx.request?.review_user_name || previousReview.reviewer?.name || 'Human Reviewer';\nconst feedbackUrl = `${ctx.n8n_public_url}/webhook/av-eval-agent/feedback`;\nconst reportPath = ctx.agents?.ReportAgent?.published_artifacts?.final_report || ctx.agents?.ReportAgent?.artifacts?.final_report || null;\nconst memory = ctx.memory || {};\nconst qualityStatus = ctx.quality_gate?.status || previousReview.quality_gate_status || null;\nconst researchStatus = ctx.research_readiness?.status || previousReview.research_readiness_status || null;\nconst qualityNeedsReview = qualityStatus !== null && qualityStatus !== 'pass';\nconst researchNeedsReview = researchStatus !== null && researchStatus !== 'research_ready';\nconst forcedReview = Boolean(ctx.failed) || qualityNeedsReview || researchNeedsReview;\nconst requestedReview = ctx.request?.review_required !== false;\nconst submissionGate = (!ctx.failed && !qualityNeedsReview && !researchNeedsReview) ? 'ready' : 'review_required';\nconst reviewItems = [\n  'Check missing and inferred values in the scenario definition JSON',\n  'Review generated OpenCDA YAML/PY files and execution options',\n  'Check SimulationRunAgent execution or dry-run status',\n  'Review KPI outputs, graphs, and interpretation in the final report',\n  'If quality/research readiness failed, revise before submitting to an external evaluator',\n  'Post feedback to the feedback webhook when revision is needed'\n];\nconst samplePayload = {\n  previous_run_id: ctx.run_id,\n  feedback_action: 'revise',\n  human_feedback: 'Example: move the actor farther away and keep V2X communication range at 20m.',\n  execute_simulation: false,\n  run_kpis: false,\n  record: false,\n  review_user_name: ctx.request?.review_user_name || DEFAULT_REVIEWER\n};\nreturn [{ json: { ...ctx, human_review: {\n  ...previousReview,\n  required: requestedReview || forcedReview,\n  status: ctx.request?.human_feedback ? 'feedback_received' : (forcedReview ? 'waiting_for_required_human_review' : 'waiting_for_optional_human_review'),\n  submission_gate: submissionGate,\n  submission_blocked: submissionGate !== 'ready',\n  run_id: ctx.run_id,\n  reviewer: {\n    ...(previousReview.reviewer || {}),\n    name: ctx.request?.review_user_name || DEFAULT_REVIEWER,\n    slack_user_id: ctx.request?.review_user_id || null,\n    slack_channel_id: ctx.request?.slack_channel_id || null,\n    workspace_url: ctx.request?.slack_workspace_url || null\n  },\n  reason: ctx.failed\n    ? `Agent failure or warning path: ${ctx.failed_agent || 'unknown'} / ${ctx.error || 'no error detail'}`\n    : (forcedReview\n      ? `Quality/research gate requires review: quality=${qualityStatus || 'not_checked'}, readiness=${researchStatus || 'not_checked'}`\n      : 'Waiting for human review and approval of the autonomous-driving evaluation report.'),\n  quality_gate_status: qualityStatus,\n  research_readiness_status: researchStatus,\n  gates: ctx.quality_gate?.gates || previousReview.gates || [],\n  approval_options: ['approve', 'revise', 'rerun_simulation', 'reject'],\n  review_items: reviewItems,\n  report_path: reportPath,\n  recommendations: memory.recommendations || [],\n  feedback_webhook_url: feedbackUrl,\n  feedback_payload_example: samplePayload\n} } }];"
+        },
+        "id": "HumanReviewGate",
+        "name": "Human-in-the-loop review gate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2832,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed_agent === 'WebhookAuthGate') {\n  return [{ json: { ...ctx, slack_notification: { status: 'skipped_auth_failure', reason: 'Unauthorized request; no reviewer notification sent.' } } }];\n}\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nconst DEFAULT_REVIEWER = 'Human Reviewer';\nconst hook = ctx.request?.slack_webhook_url;\nconst hr = ctx.human_review || {};\nconst reviewer = hr.reviewer || {};\nconst reviewerLabel = reviewer.slack_user_id ? `<@${reviewer.slack_user_id}>` : (reviewer.name || DEFAULT_REVIEWER);\nconst lineBreak = String.fromCharCode(10);\nconst text = [\n  `:rotating_light: *AV Evaluation Agent - Human Review Required*`,\n  `Reviewer: ${reviewerLabel}`,\n  `run_id: ${ctx.run_id}`,\n  `Status: ${hr.status || 'unknown'}`,\n  `Submission gate: ${hr.submission_gate || 'unknown'}`,\n  `Quality gate: ${hr.quality_gate_status || 'not_checked'}`,\n  `Research readiness: ${hr.research_readiness_status || 'not_checked'}`,\n  `Report: ${hr.report_path || '(not generated)'}`,\n  `Feedback re-entry URL: ${hr.feedback_webhook_url}`,\n  `Approval options: ${(hr.approval_options || []).join(', ')}`,\n  `Feedback payload example: ${JSON.stringify(hr.feedback_payload_example)}`,\n  `Slack workspace: ${reviewer.workspace_url || ctx.request?.slack_workspace_url || '(not provided)'}`\n].join(lineBreak);\nif (!hook) {\n  return [{ json: { ...ctx, slack_notification: {\n    status: 'credential_required',\n    reason: 'Slack DM/channel notification requires an n8n Slack credential or a webhook URL. The workflow still creates the review package and feedback URL.',\n    target_reviewer: reviewerLabel,\n    workspace_url: reviewer.workspace_url || ctx.request?.slack_workspace_url || null,\n    message_preview: text\n  } } }];\n}\ntry {\n  await requestWithRetry({\n    method: 'POST',\n    url: hook,\n    headers: { 'Content-Type': 'application/json' },\n    body: { text },\n    json: true,\n    timeout: 30000\n  });\n  return [{ json: { ...ctx, slack_notification: {\n    status: 'sent',\n    target_reviewer: reviewerLabel,\n    workspace_url: reviewer.workspace_url || ctx.request?.slack_workspace_url || null,\n    message_preview: text\n  } } }];\n} catch (error) {\n  return [{ json: { ...ctx, slack_notification: {\n    status: 'failed_but_continued',\n    error: String(error.message || error),\n    target_reviewer: reviewerLabel,\n    workspace_url: reviewer.workspace_url || ctx.request?.slack_workspace_url || null,\n    message_preview: text\n  } } }];\n}"
+        },
+        "id": "SlackHITLNotification",
+        "name": "Slack HITL notification",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3040,
+          -120
+        ],
+        "notesInFlow": true,
+        "notes": "Fallback Slack preview/webhook node. Disconnected while native Slack approval is active."
+      },
+      {
+        "parameters": {
+          "jsCode": "const incoming = $input.first().json;\nif (incoming.failed_agent === 'WebhookAuthGate') {\n  return [{ json: { ...incoming, feedback_loop: { mode: 'none', status: 'skipped_auth_failure', reason: 'Unauthorized request.' } } }];\n}\nlet ctx = incoming;\nlet slackApproval = incoming?.data || incoming?.slack_approval || null;\ntry {\n  const reviewItem = $('Human-in-the-loop review gate').first().json;\n  if (reviewItem && reviewItem.run_id) {\n    ctx = {\n      ...reviewItem,\n      ...incoming,\n      request: reviewItem.request || incoming.request,\n      agents: reviewItem.agents || incoming.agents,\n      human_review: reviewItem.human_review || incoming.human_review,\n      quality_gate: reviewItem.quality_gate || incoming.quality_gate,\n      research_readiness: reviewItem.research_readiness || incoming.research_readiness,\n      slack_notification: incoming.slack_notification || reviewItem.slack_notification || null,\n      slack_approval: slackApproval\n    };\n  }\n} catch (error) {\n  ctx = { ...incoming, context_recovery_error: String(error.message || error) };\n}\nconst feedback = ctx.request?.human_feedback || null;\nconst previousRunId = ctx.request?.previous_run_id || null;\nconst feedbackUrl = ctx.human_review?.feedback_webhook_url;\nconst approved = ctx.slack_approval?.approved;\nlet status = 'awaiting_feedback';\nlet nextStep = 'When the reviewer posts feedback to the feedback_webhook_url, the same agent pipeline restarts from the beginning.';\nif (approved === true) {\n  status = 'approved_by_human';\n  nextStep = 'Evaluation run is approved. Final response can be archived or published.';\n} else if (approved === false) {\n  status = 'revision_requested_by_slack';\n  nextStep = 'Reviewer selected revise. Post concrete revision feedback to the feedback_webhook_url to start a revised run.';\n} else if (feedback) {\n  status = 'feedback_ingested_and_pipeline_restarted';\n  nextStep = 'This is a re-entry execution generated from human feedback.';\n}\nconst revisedRequest = feedback\n  ? `Revise previous run ${previousRunId || ctx.run_id} with evaluator feedback: ${feedback}`\n  : null;\nreturn [{ json: { ...ctx, feedback_loop: {\n  mode: 'human_in_the_loop',\n  reviewer: ctx.human_review?.reviewer || null,\n  status,\n  slack_approval: ctx.slack_approval || null,\n  feedback_action: ctx.request?.feedback_action || (approved === false ? 'revise' : null),\n  previous_run_id: previousRunId || null,\n  feedback_webhook_url: feedbackUrl,\n  received_feedback: feedback || null,\n  revised_user_request: revisedRequest,\n  next_step: nextStep\n} } }];"
+        },
+        "id": "FeedbackDataTransformation",
+        "name": "Feedback data transformation",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3300,
+          -120
+        ]
+      },
+      {
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "message",
+          "operation": "sendAndWait",
+          "select": "channel",
+          "channelId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $json.human_review.reviewer.slack_channel_id || $json.request.slack_channel_id || '' }}"
+          },
+          "message": "*AV Evaluation Agent - Human Review Required*\n\nReviewer: {{$json.human_review.reviewer.name}}\nRun ID: {{$json.run_id}}\nStatus: {{$json.human_review.status}}\n\nReport:\n{{$json.human_review.report_path}}\n\nFeedback re-entry URL:\n{{$json.human_review.feedback_webhook_url}}\n\nApprove if the scenario definition, simulation plan, KPI results, and final report are acceptable. Choose revise if evaluator feedback should be reflected through the feedback loop.",
+          "responseType": "approval",
+          "approvalOptions": {
+            "values": {
+              "approvalType": "double",
+              "approveLabel": "approve",
+              "buttonApprovalStyle": "primary",
+              "disapproveLabel": "revise",
+              "buttonDisapprovalStyle": "secondary"
+            }
+          },
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "type": "n8n-nodes-base.slack",
+        "typeVersion": 2.5,
+        "position": [
+          3040,
+          -240
+        ],
+        "id": "d1e3f8c3-db52-4414-90d1-aaea52f998e4",
+        "name": "Slack HITL approval",
+        "webhookId": "1be459b9-fc4d-4fdf-bac8-092cbc7a4d07",
+        "notesInFlow": true,
+        "notes": "Optional native Slack send-and-wait approval node. Disabled in submission-safe default route; enable and connect after deployment credential review.",
+        "disabled": true
+      },
+      {
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "id": "PreflightAgent",
+        "name": "0. PreflightAgent",
+        "position": [
+          -336,
+          80
+        ],
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (ctx.failed) return [{ json: ctx }];\ntry {\n  const scenarioId = ctx.request?.scenario_id || '';\n  const url = scenarioId ? `${ctx.base_url}/agent/preflight?scenario_id=${encodeURIComponent(scenarioId)}` : `${ctx.base_url}/agent/preflight`;\n  const data = await requestWithRetry({ method: 'GET', url, json: true, timeout: 30000 });\n  const failed = data.status === 'failed';\n  return [{ json: { ...ctx, preflight: data, failed, failed_agent: failed ? 'PreflightAgent' : ctx.failed_agent, error: failed ? 'Preflight failed: CARLA/n8n/OpenCDA readiness check did not pass' : ctx.error } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'PreflightAgent', error: String(error.message || error) } }];\n}"
+        }
+      },
+      {
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "id": "FailureDiagnosisAgent",
+        "name": "5b. FailureDiagnosisAgent",
+        "position": [
+          1344,
+          80
+        ],
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (!ctx.run_id) {\n  return [{ json: { ...ctx, failed: true, failed_agent: ctx.failed_agent || 'FailureDiagnosisAgent', error: ctx.error || 'Missing run_id for failure diagnosis' } }];\n}\nif (!ctx.failed) {\n  return [{ json: {\n    ...ctx,\n    agents: {\n      ...ctx.agents,\n      FailureDiagnosisAgent: {\n        agent: 'FailureDiagnosisAgent',\n        status: 'skipped_no_failure',\n        reason: 'No upstream failure was detected, so failure diagnosis was not executed.'\n      }\n    },\n    failure_diagnosis: { status: 'skipped_no_failure' }\n  } }];\n}\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/failure-diagnosis/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { previous_failed_agent: ctx.failed_agent || null, previous_error: ctx.error || null },\n    json: true,\n    timeout: 120000\n  });\n  return [{ json: { ...ctx, agents: { ...ctx.agents, FailureDiagnosisAgent: data }, failure_diagnosis: data, failure_diagnosis_executed_after_failure: Boolean(ctx.failed) } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'FailureDiagnosisAgent', error: String(error.message || error) } }];\n}"
+        }
+      },
+      {
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "id": "RunQualityGateAgent",
+        "name": "5c. RunQualityGateAgent",
+        "position": [
+          1600,
+          80
+        ],
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (!ctx.run_id) return [{ json: { ...ctx, failed: true, failed_agent: ctx.failed_agent || 'RunQualityGateAgent', error: ctx.error || 'Missing run_id for quality gate' } }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/quality-gate/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { previous_failed_agent: ctx.failed_agent || null, previous_error: ctx.error || null },\n    json: true,\n    timeout: 120000\n  });\n  const needsReview = data.status !== 'pass' || Boolean(ctx.failed);\n  return [{ json: { ...ctx, agents: { ...ctx.agents, RunQualityGateAgent: data }, quality_gate: data, human_review: { ...(ctx.human_review || {}), required: needsReview, quality_gate_status: data.status, gates: data.gates } } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'RunQualityGateAgent', error: String(error.message || error) } }];\n}"
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nasync function requestWithRetry(options, attempts = 3, baseDelayMs = 500) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = baseDelayMs * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\nif (!ctx.run_id) return [{ json: { ...ctx, failed: true, failed_agent: ctx.failed_agent || 'ResearchReadinessAgent', error: ctx.error || 'Missing run_id for research readiness audit' } }];\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/agent/research-readiness/${ctx.run_id}`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: { previous_failed_agent: ctx.failed_agent || null, previous_error: ctx.error || null },\n    json: true,\n    timeout: 120000\n  });\n  return [{ json: { ...ctx, agents: { ...ctx.agents, ResearchReadinessAgent: data }, research_readiness: data } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, failed_agent: 'ResearchReadinessAgent', error: String(error.message || error) } }];\n}"
+        },
+        "id": "ResearchReadinessAgent",
+        "name": "5d. ResearchReadinessAgent",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1728,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nconst channelId = ctx.human_review?.reviewer?.slack_channel_id || ctx.request?.slack_channel_id || '';\nreturn [{ json: { ...ctx, use_native_slack_approval: Boolean(channelId), slack_channel_id_resolved: channelId, slack_routing_note: channelId ? 'Native Slack approval channel is configured but the submission-safe default route uses fallback notification. Connect this node to Slack HITL approval in deployment if send-and-wait is required.' : 'No Slack approval channel configured; using fallback review package.' } }];"
+        },
+        "id": "SlackApprovalRouting",
+        "name": "Slack approval routing",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2580,
+          -144
+        ],
+        "notesInFlow": true,
+        "notes": "Default route is non-blocking fallback to avoid credential-dependent workflow failure. Connect to Slack HITL approval in deployment when credential and channel are configured."
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json }}",
+          "options": {
+            "responseCode": "={{ $json.response_code || ($json.failed_agent === \"WebhookAuthGate\" ? 401 : ($json.success === false ? 500 : 200)) }}"
+          }
+        },
+        "id": "RespondMainOrchestration",
+        "name": "Return orchestration response",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          3920,
+          80
+        ]
+      }
+    ],
+    "connections": {
+      "When scenario request received": {
+        "main": [
+          [
+            {
+              "node": "Normalize chat/webhook request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize chat/webhook request": {
+        "main": [
+          [
+            {
+              "node": "Scenario definition knowledge pack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Scenario definition knowledge pack": {
+        "main": [
+          [
+            {
+              "node": "KPI standard knowledge pack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "KPI standard knowledge pack": {
+        "main": [
+          [
+            {
+              "node": "Backend runtime guard",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Backend runtime guard": {
+        "main": [
+          [
+            {
+              "node": "Load AV Agent tool registry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load AV Agent tool registry": {
+        "main": [
+          [
+            {
+              "node": "0. PreflightAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1. ScenarioSpecAgent": {
+        "main": [
+          [
+            {
+              "node": "2. ScenarioValidationAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2. ScenarioValidationAgent": {
+        "main": [
+          [
+            {
+              "node": "3. ExperimentBuildAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3. ExperimentBuildAgent": {
+        "main": [
+          [
+            {
+              "node": "4. SimulationRunAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "4. SimulationRunAgent": {
+        "main": [
+          [
+            {
+              "node": "5. KPIAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5. KPIAgent": {
+        "main": [
+          [
+            {
+              "node": "5b. FailureDiagnosisAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6. ReportAgent": {
+        "main": [
+          [
+            {
+              "node": "7. MemoryAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "7. MemoryAgent": {
+        "main": [
+          [
+            {
+              "node": "8. GPT AutoTuneAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "8. GPT AutoTuneAgent": {
+        "main": [
+          [
+            {
+              "node": "Human-in-the-loop review gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When human feedback received": {
+        "main": [
+          [
+            {
+              "node": "Normalize chat/webhook request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Human-in-the-loop review gate": {
+        "main": [
+          [
+            {
+              "node": "Slack approval routing",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Feedback data transformation": {
+        "main": [
+          [
+            {
+              "node": "Structure final response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "0. PreflightAgent": {
+        "main": [
+          [
+            {
+              "node": "1. ScenarioSpecAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5b. FailureDiagnosisAgent": {
+        "main": [
+          [
+            {
+              "node": "5c. RunQualityGateAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5c. RunQualityGateAgent": {
+        "main": [
+          [
+            {
+              "node": "5d. ResearchReadinessAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5d. ResearchReadinessAgent": {
+        "main": [
+          [
+            {
+              "node": "6. ReportAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack HITL approval": {
+        "main": [
+          [
+            {
+              "node": "Feedback data transformation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack approval routing": {
+        "main": [
+          [
+            {
+              "node": "Slack HITL notification",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack HITL notification": {
+        "main": [
+          [
+            {
+              "node": "Feedback data transformation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structure final response": {
+        "main": [
+          [
+            {
+              "node": "Return orchestration response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "saveDataSuccessExecution": "all",
+      "saveDataErrorExecution": "all",
+      "timezone": "Asia/Seoul",
+      "binaryMode": "separate"
+    },
+    "staticData": null,
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "seven-agent-native-slack-hitl-song-chaewon",
+    "activeVersionId": "70041686-c21d-485e-99c9-91037c17a7eb",
+    "versionCounter": 28,
+    "triggerCount": 2,
+    "sourceWorkflowId": null,
+    "tags": [
+      {
+        "name": "submission-safe"
+      },
+      {
+        "name": "no-credentials"
+      },
+      {
+        "name": "report-only"
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  },
+  {
+    "id": "AV_EVAL_AGENT_ASYNC_SUBMIT",
+    "name": "AV Evaluation Agent - Async CARLA Run Submitter",
+    "description": "Async submitter for long CARLA/OpenCDA simulation runs. Returns run_id/status_url immediately and lets backend worker handle execution.",
+    "active": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "av-eval-agent-async",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "AsyncWebhookStart",
+        "name": "When scenario request received (async)",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          -720,
+          0
+        ],
+        "webhookId": "av-eval-agent-async-webhook"
+      },
+      {
+        "parameters": {
+          "jsCode": "const incoming = $input.first().json;\nconst body = incoming.body ?? incoming;\nconst query = incoming.query ?? {};\nconst headers = incoming.headers ?? {};\nconst baseUrl = body.base_url || query.base_url || 'http://host.docker.internal:8010';\nconst userRequest = body.user_request || body.chatInput || body.message || body.prompt || body.text || query.user_request || 'Generate an autonomous-driving scenario definition and execute the evaluation pipeline.';\nconst workflowToken = (typeof $vars !== 'undefined' && $vars.AV_AGENT_WEBHOOK_TOKEN)\n  ? String($vars.AV_AGENT_WEBHOOK_TOKEN)\n  : null;\nconst requiredToken = workflowToken || body.required_token || query.required_token || null;\nconst providedToken = headers['x-av-agent-token'] || headers['X-AV-Agent-Token'] || body.auth_token || query.auth_token || null;\nif (requiredToken && providedToken !== requiredToken) {\n  return [{ json: { failed: true, response_code: 401, error: 'Unauthorized scenario request. Missing or invalid x-av-agent-token/auth_token.', base_url: baseUrl, security: { auth_required: true, auth_mode: 'token_checked' } } }];\n}\nconst reproducibility = {\n  autotune_model: body.autotune_model || query.autotune_model || 'gpt-4.1-mini',\n  autotune_temperature: body.autotune_temperature ?? query.autotune_temperature ?? 0.2,\n  autotune_seed: body.autotune_seed ?? query.autotune_seed ?? 20260628,\n  model_version_note: body.model_version_note || query.model_version_note || 'Pinned request metadata for reproducible research logging.'\n};\nreturn [{ json: {\n  failed: false,\n  response_code: 202,\n  base_url: baseUrl,\n  security: { auth_required: Boolean(requiredToken), auth_mode: requiredToken ? 'token_checked' : 'not_configured' },\n  reproducibility,\n  request: {\n    user_request: userRequest,\n    execute_simulation: body.execute_simulation ?? true,\n    run_kpis: body.run_kpis ?? true,\n    apply_ml: body.apply_ml ?? false,\n    record: body.record ?? false,\n    background: true,\n    autotune_model: reproducibility.autotune_model,\n    autotune_temperature: reproducibility.autotune_temperature,\n    autotune_seed: reproducibility.autotune_seed,\n    model_version_note: reproducibility.model_version_note\n  }\n} }];"
+        },
+        "id": "NormalizeAsyncRequest",
+        "name": "Normalize and auth-check request",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nasync function requestWithRetry(options, attempts = 3) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = 500 * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\ntry {\n  const health = await requestWithRetry({ method: 'GET', url: `${ctx.base_url}/health`, json: true, timeout: 10000 }, 3);\n  return [{ json: { ...ctx, backend_health: health } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, response_code: 503, failed_agent: 'BackendRuntimeGuard', error: `Backend health check failed after retries: ${String(error.message || error)}` } }];\n}"
+        },
+        "id": "AsyncBackendGuard",
+        "name": "Backend runtime guard with retry",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $input.first().json;\nif (ctx.failed) return [{ json: ctx }];\nasync function requestWithRetry(options, attempts = 3) {\n  let lastError;\n  for (let i = 0; i < attempts; i += 1) {\n    try {\n      return await helpers.httpRequest(options);\n    } catch (error) {\n      lastError = error;\n      const waitMs = 1000 * Math.pow(2, i);\n      await new Promise(resolve => setTimeout(resolve, waitMs));\n    }\n  }\n  throw lastError;\n}\ntry {\n  const data = await requestWithRetry({\n    method: 'POST',\n    url: `${ctx.base_url}/pipeline/submit`,\n    headers: { 'Content-Type': 'application/json; charset=utf-8' },\n    body: {\n      user_request: ctx.request.user_request,\n      execute_simulation: ctx.request.execute_simulation,\n      run_kpis: ctx.request.run_kpis,\n      apply_ml: ctx.request.apply_ml,\n      record: ctx.request.record,\n      background: true\n    },\n    json: true,\n    timeout: 120000\n  }, 3);\n  const executionRequested = Boolean(ctx.request.execute_simulation || ctx.request.run_kpis);\n  return [{ json: {\n    success: true,\n    response_code: 202,\n    mode: 'async_background_pipeline',\n    run_id: data.run_id,\n    status: data.status,\n    message: executionRequested\n      ? 'Run accepted. CARLA/OpenCDA execution, KPI calculation, diagnosis, quality gate, readiness audit, and report generation continue in the backend background worker.'\n      : 'Run prepared only. No background execution was requested because execute_simulation=false and run_kpis=false.',\n    status_url: data.urls?.status || `${ctx.base_url}/pipeline/status/${data.run_id}`,\n    result_url: data.urls?.run_result || `${ctx.base_url}/run/result/${data.run_id}`,\n    api_docs: data.urls?.api_docs || `${ctx.base_url}/docs`,\n    backend_response: data,\n    security: ctx.security || null,\n    reproducibility: ctx.reproducibility || null\n  } }];\n} catch (error) {\n  return [{ json: { ...ctx, failed: true, response_code: 502, failed_agent: 'AsyncPipelineSubmitter', error: String(error.message || error) } }];\n}"
+        },
+        "id": "SubmitPipelineAsync",
+        "name": "Submit CARLA evaluation pipeline",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json }}",
+          "options": {
+            "responseCode": "={{ $json.response_code || ($json.failed ? 500 : 202) }}"
+          }
+        },
+        "id": "RespondAsyncAccepted",
+        "name": "Return run_id and status URL",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          240,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "When scenario request received (async)": {
+        "main": [
+          [
+            {
+              "node": "Normalize and auth-check request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize and auth-check request": {
+        "main": [
+          [
+            {
+              "node": "Backend runtime guard with retry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Backend runtime guard with retry": {
+        "main": [
+          [
+            {
+              "node": "Submit CARLA evaluation pipeline",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Submit CARLA evaluation pipeline": {
+        "main": [
+          [
+            {
+              "node": "Return run_id and status URL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "saveDataSuccessExecution": "all",
+      "saveDataErrorExecution": "all",
+      "timezone": "Asia/Seoul"
+    },
+    "pinData": {}
+  }
+]

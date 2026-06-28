@@ -29,6 +29,9 @@ from opencda.scenario_testing.utils.yaml_utils import \
 from omegaconf import OmegaConf
 
 
+DEFAULT_AGENT_MAX_TICKS = 220
+
+
 def _dump_dir(current_path, scenario_params):
     return os.path.abspath(os.path.join(
         current_path,
@@ -89,6 +92,10 @@ def run_scenario(opt, scenario_params):
             os.path.join(dump_dir, 'scenario.log'), True)
         recorder_started = True
         tick_count = 0
+        ticks_limit = getattr(opt, 'ticks', None)
+        if ticks_limit is None:
+            ticks_limit = scenario_params.get('scenario', {}).get(
+                'max_ticks', DEFAULT_AGENT_MAX_TICKS)
         # run steps
         while True:
             scenario_manager.tick()
@@ -108,7 +115,7 @@ def run_scenario(opt, scenario_params):
                 single_cav.update_info()
                 control = single_cav.run_step()
                 single_cav.vehicle.apply_control(control)
-            if opt.ticks is not None and tick_count >= opt.ticks:
+            if ticks_limit is not None and tick_count >= ticks_limit:
                 break
 
     finally:

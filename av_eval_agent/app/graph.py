@@ -9,6 +9,7 @@ from uuid import uuid4
 from langgraph.graph import END, StateGraph
 
 from app.services.scenario_definition_autofill import collect_definition_autofill_values
+from app.services.scenario_spec_gpt import generate_gpt_definition_autofill
 from app.services.scenario_definition_template import build_scenario_definition_form
 from app.state import AgentState
 
@@ -164,6 +165,10 @@ def requirement_understanding_node(state: AgentState) -> AgentState:
     text = state.get("user_request", "")
     lowered = text.lower()
     scenario_type = _detect_scenario_type(text)
+    wants_report = any(
+        keyword in lowered or keyword in text
+        for keyword in ["대시보드", "dashboard", "그래프", "보고서", "레이더", "report"]
+    )
     intent = {
         "scenario_type": scenario_type,
         "requested_actions": {
@@ -172,10 +177,8 @@ def requirement_understanding_node(state: AgentState) -> AgentState:
             "build_experiment_files": True,
             "run_simulation": _extract_run_request(text, lowered),
             "calculate_kpis": any(keyword in lowered or keyword in text for keyword in ["kpi", "지표", "계산", "평가"]),
-            "generate_dashboard": any(
-                keyword in lowered or keyword in text
-                for keyword in ["대시보드", "dashboard", "그래프", "보고서", "레이더"]
-            ),
+            "generate_dashboard": wants_report,
+            "generate_report": wants_report,
         },
         "detected_values": {
             "speed_kmh": _extract_speed_hint(text),
@@ -203,6 +206,24 @@ def _scenario_id_for_type(scenario_type: str) -> str:
     return "custom"
 
 
+def _apply_gpt_definition_autofill(
+    definition_form: dict[str, Any],
+    gpt_autofill: dict[str, Any],
+) -> None:
+    values = gpt_autofill.get("values") or {}
+    if not isinstance(values, dict) or not values:
+        definition_form["gpt_autofill"] = gpt_autofill
+        return
+
+    value_column = "시험 시나리오"
+    for row in definition_form.get("rows", []):
+        key = row.get("value_key")
+        if key in values and values[key] not in (None, ""):
+            row[value_column] = str(values[key])
+            row["value_source"] = gpt_autofill.get("source", "gpt_autofill")
+    definition_form["gpt_autofill"] = gpt_autofill
+
+
 def scenario_specification_node(state: AgentState) -> AgentState:
     text = state.get("user_request", "")
     intent = state.get("intent", {})
@@ -222,6 +243,16 @@ def scenario_specification_node(state: AgentState) -> AgentState:
         autofill_values=autofill.get("values", {}),
         autofill_sources=autofill,
     )
+    gpt_autofill = generate_gpt_definition_autofill(
+        scenario_id=scenario_id,
+        scenario_type=scenario_type,
+        natural_language_request=text,
+        reference_speed_kmh=reference_speed,
+        detected_values=detected,
+        definition_rows=definition_form.get("rows", []),
+        existing_values=autofill.get("values", {}),
+    )
+    _apply_gpt_definition_autofill(definition_form, gpt_autofill)
 
     scenario_definition: Dict[str, Any] = {
         "schema_version": "0.2.0",
@@ -230,6 +261,7 @@ def scenario_specification_node(state: AgentState) -> AgentState:
         "natural_language_request": text,
         "definition_format": definition_form["definition_format"],
         "definition_form": definition_form,
+        "gpt_value_autofill": gpt_autofill,
         "road": {
             "map_name": "OpenCDA/CARLA",
             "road_type": "highway_or_2lane" if scenario_id == "scenario_2" else "unsignalized_intersection",
@@ -354,7 +386,6 @@ def experiment_planning_node(state: AgentState) -> AgentState:
             "generated OpenCDA YAML/PY files",
             "OpenCDA/CARLA logs",
             "KPI result JSON/CSV",
-            "dashboard/index.html",
             "evaluation_report.md",
         ],
         "runner_policy": {
@@ -443,7 +474,6 @@ def artifact_planning_node(state: AgentState) -> AgentState:
         "run_manifest": f"av_eval_agent/data/runs/{run_id}/run_manifest.json",
         "execution_plan": f"av_eval_agent/data/runs/{run_id}/execution_plan.json",
         "kpi_result": f"av_eval_agent/data/runs/{run_id}/kpi/kpi_result.json",
-        "dashboard": f"av_eval_agent/data/runs/{run_id}/dashboard/index.html",
         "report": f"av_eval_agent/data/runs/{run_id}/report/evaluation_report.md",
         "note": "Agent가 정의서 표, 실행 계획, KPI 계획, 산출물 구조를 생성합니다. 실제 OpenCDA/CARLA 실행은 worker endpoint 승인 후 수행합니다.",
     }
