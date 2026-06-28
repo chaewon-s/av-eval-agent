@@ -1,99 +1,73 @@
-# 시나리오 정의서 표준 형식
+# Scenario Definition Format
 
-## 기준 문서
-
-- 기준 PDF: `C:/Users/User/Desktop/연구 관련 파일/(과-19)시나리오 정의서 (2).pdf`
-- Agent 내부 형식명: `과-19_시나리오_정의서_6-layer_v2`
-
-이 Agent는 자연어 시나리오 요청을 받으면 위 PDF의 정의서 형식에 맞춰 구조화한다. 핵심은 시나리오가 달라져도 표의 뼈대는 동일하게 유지하고, `시험 시나리오` 열의 값만 조건에 맞게 채우는 것이다.
-
-## 정의서 상단 항목
-
-정의서 상단에는 다음 항목을 채운다.
-
-| 구분 | 의미 |
-|---|---|
-| 시나리오 타입 - 유형 | 예: 자율주행차량 주행 |
-| 시나리오 타입 - 위치 | 예: 비신호 4지 교차로, 2차로 직선 도로 |
-| 시나리오 타입 - 목적 | 해당 실험에서 평가하려는 목적 |
-| 전체 상황도 | 영상, top-view, 도식 이미지 등 |
-| 시나리오 상세 설명 | 자연어 기반 상황 설명 |
-| 인지 음영 원인 | 시야 차폐, 선행 차량, 정차 차량 등 |
-
-## 정의서 표 컬럼
-
-PDF의 표 구조와 동일하게 5개 열을 사용한다.
-
-| 컬럼 | 설명 |
-|---|---|
-| 레이어 | 1~6 layer 구분 |
-| 항목 | 도로구간, 도로시설물, Ego Vehicle 등 |
-| 요소 | 실제로 채워야 하는 변수명 |
-| 설명 | 변수 의미 |
-| 시험 시나리오 | 해당 실험에서 사용하는 값 |
-
-## 6-Layer 구성
-
-| 레이어 | 내용 |
-|---|---|
-| 레이어 1: 평면 데이터 | 도로구간, 도로선형, 차로수, 제한속도 등 |
-| 레이어 2: 입체 데이터 | 도로 구조물, 신호기, 표지, 조명 등 |
-| 레이어 3: 가변시설 및 임시시설 데이터 | 공사, 사고, 임시시설, 가변운영 조건 등 |
-| 레이어 4: 시나리오 참여자 데이터 | Ego, Actor, Neighboring 차량 조건 |
-| 레이어 5: 주변환경 데이터 | 교통 밀도, 조도, 날씨, 노면, 가시성 조건 |
-| 레이어 6: 디지털 데이터 | 센서, V2X 통신, 통신 지연/손실, 동적 정보 유형 |
-
-## Agent 산출 파일
-
-run이 생성되면 다음 파일이 함께 저장된다.
-
-| 파일 | 의미 |
-|---|---|
-| `scenario_definition.json` | Agent 내부 전체 정의서 |
-| `scenario_definition_form.json` | PDF 표준 양식만 따로 분리한 JSON |
-| `scenario_definition_form.csv` | Excel/한글 문서에 붙이기 쉬운 5열 표 |
-
-저장 위치:
+## Source Format
 
 ```text
-av_eval_agent/data/runs/<run_id>/
+과-19_시나리오_정의서_6-layer_v2
 ```
 
-## 값 보완 정책
+## Header
 
-자연어 요청만으로 확정할 수 없는 값은 `시나리오별 설정`, `YAML spawn_position 기준 산출`, `실험 로그 기준 산출`처럼 표시한다. 이 값들은 다음 단계에서 YAML, Python 실행 파일, CARLA 로그를 기준으로 보완한다.
-
-즉 Agent의 역할은 다음 순서로 나뉜다.
-
-1. 자연어 요청을 정의서 형식으로 구조화
-2. 미정 또는 계산 필요 항목을 명시
-3. YAML/PY 실행 파일에 적용 가능한 값으로 변환
-4. 실험 실행 후 로그 기반으로 KPI와 누락 값을 보완
-
-## KPI와의 관계
-
-시나리오 정의서는 입력 조건을 고정하는 문서이고, KPI는 결과 평가 문서다. 따라서 시나리오가 1번이든 2번이든 KPI 축은 동일하게 유지한다.
-
-| 평가축 | KPI |
+| Field | Example |
 |---|---|
-| 인지 | MOTA, MOTP |
-| 교통 영향성 | Progress-adjusted Delay, Flow Efficiency |
-| 주행 안전성 | Min 2D TTC, PET, Required Deceleration |
-| 제어 성능 | Acceleration Variance Max, Yaw-rate Residual RMS |
+| scenario_id | `scenario_2` |
+| scenario_type | `cut_in` |
+| ego_vehicle | `cav_0` |
+| target_vehicle | `background_vehicle_1` |
+| map | `Town06` |
+| v2x | `enabled` |
 
-## 미기재 값 자동 보완 기준
+## Table Columns
 
-자연어 요청이나 YAML에 명시되지 않은 값은 정의서가 비지 않도록 일반 시험 가정값으로 보완한다. 단, YAML에 값이 있으면 YAML 값을 우선한다.
+```text
+레이어 / 항목 / 요소 / 설명 / 시험 시나리오
+```
 
-| 항목 | 자동 보완 기준 |
+## 6 Layers
+
+| Layer | Data |
 |---|---|
-| 센서 탐지 범위 | YAML LiDAR `range` 우선, 없으면 `LiDAR 50m 기준` |
-| 센서 해상도 | YAML LiDAR `channels` 우선 |
-| 센서 주파수 | YAML LiDAR `rotation_frequency` 우선 |
-| 센서 대역폭 | YAML `points_per_second` 기반 계산. `points/s * 16B * 8`로 Mbps 환산. 값이 없으면 `100,000pts/s`, 즉 약 `12.8Mbps` 가정 |
-| 통신 대역폭 | `10MHz 채널 대역폭` 가정 |
-| 통신 주파수 | `5.9GHz ITS band` 가정 |
-| 통신 지연시간 | `100ms 이하` 가정 |
-| 데이터 손실률 | `1% 이하` 가정 |
+| 1 | road and map |
+| 2 | traffic objects |
+| 3 | variable infrastructure |
+| 4 | scenario participants |
+| 5 | environment |
+| 6 | digital information |
 
-위 값들은 실제 장비 인증값이 아니라 평가 프로그램 MVP에서 시나리오 정의서를 자동으로 완성하기 위한 기본 가정값이다. 추후 실제 OBU/RSU, 카메라, LiDAR 사양이 입력되면 해당 장비값으로 덮어쓴다.
+## Output Files
+
+| File | Content |
+|---|---|
+| `scenario_definition.json` | full internal definition |
+| `scenario_definition_form.json` | table-only JSON |
+| `scenario_definition_form.csv` | 5-column table |
+
+## Autofill Rules
+
+| Missing Item | Default |
+|---|---|
+| map | scenario default |
+| ego vehicle | `cav_0` |
+| target vehicle | scenario default |
+| weather | clear |
+| traffic density | normal |
+| V2X | request value or scenario default |
+
+## Validation
+
+| Check | Output |
+|---|---|
+| missing required field | validation error |
+| ambiguous value | validation warning |
+| unsafe execution request | approval required |
+| external simulator missing | dry-run plan |
+
+## KPI Link
+
+| Scenario Field | KPI Use |
+|---|---|
+| V2X | safety and traffic impact comparison |
+| speed | control and safety KPI |
+| sensor condition | perception KPI context |
+| cut-in distance | TTC and required deceleration |
+| traffic density | delay and flow efficiency |

@@ -1,23 +1,19 @@
-# AV Evaluation AI Agent Package
-
-`av_eval_agent`는 자연어 자율주행 평가 요청을 구조화된 시나리오 정의, 실행 계획, KPI 계획, 검증 가능한 산출물로 바꾸는 Agent prototype이다.
-
-이 패키지는 전체 OpenCDA/CARLA 프로젝트가 아니라 **Agent 설계와 dry-run 검증에 필요한 최소 실행 단위**만 포함한다.
+# AV Evaluation Agent Package
 
 ## Components
 
 | Path | Role |
 |---|---|
-| `app/` | FastAPI gateway, LangGraph Agent, planner/validator/service modules |
-| `docs/` | Agent architecture and operating documents |
-| `evals/` | deterministic eval cases and runner |
-| `examples/` | sample natural-language API requests |
-| `mcp/` | local MCP tool server prototype |
-| `n8n/` | n8n workflow JSON templates |
-| `schemas/` | JSON schemas for run artifacts |
-| `scripts/` | PowerShell helpers for eval/API smoke tests |
+| `app/` | FastAPI gateway, LangGraph graph, service layer |
+| `docs/` | design and operation notes |
+| `evals/` | fixed eval cases and runner |
+| `examples/` | sample API payloads |
+| `mcp/` | MCP stdio server |
+| `n8n/` | workflow templates |
+| `schemas/` | JSON schemas |
+| `scripts/` | PowerShell helpers |
 
-## Verify Without CARLA
+## Eval
 
 ```powershell
 cd <repo-root>
@@ -35,33 +31,22 @@ partial: 0
 fail: 0
 ```
 
-## Start API
+## API
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\av_eval_agent\scripts\start_agent_server.ps1
-```
-
-Health check:
-
-```powershell
 Invoke-RestMethod http://127.0.0.1:8010/health
-```
-
-Dry-run API test:
-
-```powershell
 powershell -ExecutionPolicy Bypass -File .\av_eval_agent\scripts\test_agent_api.ps1
 ```
 
-The API smoke test does not run CARLA. It verifies Agent planning, run artifact creation, command planning, and dry-run behavior.
+## External Boundary
 
-## External Simulator Boundary
-
-Actual CARLA/OpenCDA execution requires an external simulator environment. In this trimmed repo:
-
-- scenario classification and definition generation are fully testable
-- OpenCDA command plans are generated
-- missing external OpenCDA targets are recorded in `execution_plan.json`
-- KPI plans are generated and can skip missing external KPI scripts safely
-
-This lets reviewers confirm the Agent architecture and control flow without downloading heavy simulator assets.
+| Item | Status |
+|---|---|
+| scenario classification | local |
+| scenario JSON/table generation | local |
+| run manifest | local |
+| OpenCDA command plan | local |
+| KPI command plan | local |
+| CARLA/OpenCDA runtime | external |
+| heavy simulator assets | external |
