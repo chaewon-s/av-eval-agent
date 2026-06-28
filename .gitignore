@@ -22,6 +22,8 @@ av_eval_agent/data/
 .env.*
 av_eval_agent/.env
 av_eval_agent/.env.*
+!.env.example
+!av_eval_agent/.env.example
 
 # OpenCDA/CARLA generated outputs
 data_dumping/

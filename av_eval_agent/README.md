@@ -5,21 +5,47 @@
 | Path | Role |
 |---|---|
 | `app/` | FastAPI gateway, LangGraph graph, service layer |
-| `docs/` | design and operation notes |
+| `docs/` | architecture and operation notes |
 | `evals/` | fixed eval cases and runner |
-| `examples/` | sample API payloads |
+| `examples/` | sample request payloads |
 | `mcp/` | MCP stdio server |
 | `n8n/` | workflow templates |
 | `schemas/` | JSON schemas |
-| `scripts/` | PowerShell helpers |
+| `scripts/` | source helper scripts |
+| `deploy_scripts/` | deployment helper scripts |
+
+## Install
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy_scripts\install_windows.ps1
+```
+
+## Run
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy_scripts\start_backend.ps1
+powershell -ExecutionPolicy Bypass -File .\deploy_scripts\start_n8n_docker.ps1
+powershell -ExecutionPolicy Bypass -File .\deploy_scripts\import_n8n_workflows.ps1
+```
+
+## Check
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy_scripts\check_health.ps1
+```
+
+## Sample Request
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy_scripts\run_sample_request.ps1 -Scenario scenario2
+```
 
 ## Eval
 
 ```powershell
-cd <repo-root>
-python -m venv .\av_eval_agent\.venv
-.\av_eval_agent\.venv\Scripts\python.exe -m pip install -r .\av_eval_agent\requirements.txt
-powershell -ExecutionPolicy Bypass -File .\av_eval_agent\scripts\run_agent_evals.ps1 --fail-on-fail
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+powershell -ExecutionPolicy Bypass -File .\scripts\run_agent_evals.ps1 --fail-on-fail
 ```
 
 Expected:
@@ -31,22 +57,12 @@ partial: 0
 fail: 0
 ```
 
-## API
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\av_eval_agent\scripts\start_agent_server.ps1
-Invoke-RestMethod http://127.0.0.1:8010/health
-powershell -ExecutionPolicy Bypass -File .\av_eval_agent\scripts\test_agent_api.ps1
-```
-
 ## External Boundary
 
-| Item | Status |
+| Included | External |
 |---|---|
-| scenario classification | local |
-| scenario JSON/table generation | local |
-| run manifest | local |
-| OpenCDA command plan | local |
-| KPI command plan | local |
-| CARLA/OpenCDA runtime | external |
-| heavy simulator assets | external |
+| scenario classification | CARLA runtime |
+| scenario JSON/table generation | OpenCDA checkout |
+| run manifest | simulator assets |
+| command plan | raw simulation dumps |
+| KPI/report plan | long-running simulator worker |
