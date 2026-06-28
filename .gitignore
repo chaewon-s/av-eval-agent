@@ -30,6 +30,7 @@ output_frames/
 output_video/
 tmp/
 scenario_runner/
+tmp_agent_design/
 
 # Local caches and heavy model artifacts
 cache/
