@@ -1,6 +1,5 @@
 # AV Evaluation Agent Document Index
 
-이 폴더에는 AV Evaluation Agent 설계와 검증에 필요한 문서만 남긴다.
 
 ## Core Design
 
